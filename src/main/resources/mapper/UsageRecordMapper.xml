@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.example.backend.mapper.UsageRecordMapper">
+    <sql id="UsageRecordColumns">
+        id,
+        person,
+        resource,
+        scene,
+        use_time as useTime,
+        status,
+        remark,
+        created_at as createdAt,
+        updated_at as updatedAt
+    </sql>
+
+    <select id="listUsageRecords" resultType="org.example.backend.entity.UsageRecordEntity">
+        select
+            <include refid="UsageRecordColumns" />
+        from usage_record
+        order by use_time desc, id desc
+    </select>
+
+    <select id="getUsageRecord" resultType="org.example.backend.entity.UsageRecordEntity">
+        select
+            <include refid="UsageRecordColumns" />
+        from usage_record
+        where id = #{id}
+    </select>
+
+    <insert id="insertUsageRecord" useGeneratedKeys="true" keyProperty="id">
+        insert into usage_record(person, resource, scene, use_time, status, remark)
+        values(#{person}, #{resource}, #{scene}, #{useTime}, #{status}, #{remark})
+    </insert>
+
+    <select id="countUsageRecordBySignature" resultType="int">
+        select count(1)
+        from usage_record
+        where person = #{person}
+          and resource = #{resource}
+          and scene = #{scene}
+          and use_time = #{useTime}
+    </select>
+
+    <update id="updateUsageRecord">
+        update usage_record
+        set
+            person = #{record.person},
+            resource = #{record.resource},
+            scene = #{record.scene},
+            use_time = #{record.useTime},
+            status = #{record.status},
+            remark = #{record.remark},
+            updated_at = now()
+        where id = #{id}
+    </update>
+
+    <update id="updateUsageRecordStatus">
+        update usage_record
+        set status = #{status},
+            updated_at = now()
+        where id = #{id}
+    </update>
+
+    <delete id="deleteAllUsageRecords">
+        delete from usage_record
+    </delete>
+</mapper>

@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.example.backend.mapper.EnvironmentTemplateMapper">
+    <select id="listTemplates" resultType="org.example.backend.entity.EnvironmentTemplateEntity">
+        select
+            id,
+            name,
+            course,
+            os,
+            software_list as softwareList,
+            labs,
+            status,
+            tag_type as tagType,
+            created_at as createdAt,
+            updated_at as updatedAt
+        from environment_template
+        order by id desc
+    </select>
+
+    <select id="getTemplate" resultType="org.example.backend.entity.EnvironmentTemplateEntity">
+        select
+            id,
+            name,
+            course,
+            os,
+            software_list as softwareList,
+            labs,
+            status,
+            tag_type as tagType,
+            created_at as createdAt,
+            updated_at as updatedAt
+        from environment_template
+        where id = #{id}
+    </select>
+
+    <select id="getTemplateByCourse" resultType="org.example.backend.entity.EnvironmentTemplateEntity">
+        select
+            id,
+            name,
+            course,
+            os,
+            software_list as softwareList,
+            labs,
+            status,
+            tag_type as tagType,
+            created_at as createdAt,
+            updated_at as updatedAt
+        from environment_template
+        where course = #{course}
+        order by id desc
+        limit 1
+    </select>
+    <select id="listTeachers" resultType="org.example.backend.VO.TeacherOptionVO">
+        SELECT DISTINCT
+            teacher AS teacherName
+        FROM class_timetable
+        WHERE teacher IS NOT NULL
+          AND TRIM(teacher) != ''
+        ORDER BY teacher
+    </select>
+
+
+    <insert id="insertTemplate" useGeneratedKeys="true" keyProperty="id">
+        insert into environment_template (
+            name,
+            course,
+            os,
+            software_list,
+            labs,
+            status,
+            tag_type
+        )
+        values (
+            #{name},
+            #{course},
+            #{os},
+            #{softwareList},
+            #{labs},
+            coalesce(#{status}, '试运行'),
+            coalesce(#{tagType}, 'primary')
+        )
+    </insert>
+
+    <update id="updateTemplate">
+        update environment_template
+        set name = #{template.name},
+            course = #{template.course},
+            os = #{template.os},
+            software_list = #{template.softwareList},
+            labs = #{template.labs},
+            status = #{template.status},
+            tag_type = #{template.tagType},
+            updated_at = now()
+        where id = #{id}
+    </update>
+
+    <delete id="deleteTemplate">
+        delete from environment_template
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteAllTemplates">
+        delete from environment_template
+    </delete>
+</mapper>

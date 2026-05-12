@@ -1,0 +1,71 @@
+smart-lab:
+  iot:
+    enabled: true
+    timeout: 5s
+    devices:
+      - code: ACCESS-C305-01
+        name: C305 前门门禁控制器
+        type: access-control
+        lab-id: 1
+        protocol: http
+        base-url: http://10.10.30.21:8080
+        username: ${IOT_ACCESS_C305_USER:}
+        password: ${IOT_ACCESS_C305_PASSWORD:}
+        commands:
+          open:
+            method: POST
+            path: /api/door/open
+            body: '{"door":"${door}","labId":"${labId}"}'
+            success-contains: success
+          lock:
+            method: POST
+            path: /api/door/lock
+            body: '{"door":"${door}","labId":"${labId}"}'
+            success-contains: success
+          card-enroll:
+            method: POST
+            path: /api/access/cards/enroll
+            body: '{"door":"${door}","labId":"${labId}","cardNo":"${cardNo}","operator":"${operator}"}'
+            success-contains: success
+          student-enroll:
+            method: POST
+            path: /api/access/students/enroll
+            body: '{"door":"${door}","labId":"${labId}","studentNo":"${studentNo}","allowStudentCard":${allowStudentCard},"allowCampusCode":${allowCampusCode},"openMethods":"${openMethods}","operator":"${operator}"}'
+            success-contains: success
+          face-enroll:
+            method: POST
+            path: /api/access/faces/enroll
+            body: '{"door":"${door}","labId":"${labId}","personNo":"${personNo}","operator":"${operator}"}'
+            success-contains: success
+          fingerprint-enroll:
+            method: POST
+            path: /api/access/fingerprints/enroll
+            body: '{"door":"${door}","labId":"${labId}","personNo":"${personNo}","operator":"${operator}"}'
+            success-contains: success
+          status:
+            method: GET
+            path: /api/door/status
+      - code: CAMERA-C305-01
+        name: C305 实验室摄像头
+        type: camera
+        lab-id: 1
+        protocol: http
+        username: ${IOT_CAMERA_C305_USER:}
+        password: ${IOT_CAMERA_C305_PASSWORD:}
+        snapshot-url: http://10.10.30.31/ISAPI/Streaming/channels/101/picture
+        hls-url: http://10.10.30.10/live/c305/index.m3u8
+      - code: RELAY-C305-LIGHT
+        name: C305 照明继电器
+        type: light
+        lab-id: 1
+        protocol: tcp
+        base-url: 10.10.30.41
+        commands:
+          set:
+            tcp:
+              port: 6000
+              payload: "hex:A00101A2"
+          off:
+            tcp:
+              port: 6000
+              payload: "hex:A00100A1"

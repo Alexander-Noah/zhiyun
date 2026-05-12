@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.example.backend.mapper.LabMapper">
+    <sql id="LabColumns">
+        l.id,
+        l.lab_code as labCode,
+        l.lab_name as labName,
+        l.building,
+        l.floor,
+        l.room_no as roomNo,
+        l.lab_type as labType,
+        l.capacity,
+        l.manager_user_id as managerUserId,
+        u.real_name as managerName,
+        l.open_status as openStatus,
+        count(d.id) as deviceCount,
+        l.remark,
+        l.created_at as createdAt,
+        l.updated_at as updatedAt
+    </sql>
+
+    <insert id="addLab" useGeneratedKeys="true" keyProperty="id">
+        insert into lab(lab_code, lab_name, building, floor, room_no, lab_type, capacity, manager_user_id, open_status, remark)
+        values(#{labCode}, #{labName}, #{building}, #{floor}, #{roomNo}, #{labType}, #{capacity}, #{managerUserId}, #{openStatus}, #{remark})
+    </insert>
+
+    <select id="getLabById" resultType="org.example.backend.entity.LabEntity">
+        select
+            <include refid="LabColumns" />
+        from lab l
+        left join sys_user u on u.id = l.manager_user_id
+        left join device d on d.lab_id = l.id
+        where l.id = #{id}
+        group by
+            l.id,
+            l.lab_code,
+            l.lab_name,
+            l.building,
+            l.floor,
+            l.room_no,
+            l.lab_type,
+            l.capacity,
+            l.manager_user_id,
+            u.real_name,
+            l.open_status,
+            l.remark,
+            l.created_at,
+            l.updated_at
+    </select>
+
+    <update id="updateLab">
+        update lab
+        set
+            lab_code = #{lab.labCode},
+            lab_name = #{lab.labName},
+            building = #{lab.building},
+            floor = #{lab.floor},
+            room_no = #{lab.roomNo},
+            lab_type = #{lab.labType},
+            capacity = #{lab.capacity},
+            manager_user_id = #{lab.managerUserId},
+            open_status = #{lab.openStatus},
+            remark = #{lab.remark}
+        where id = #{id}
+    </update>
+
+    <delete id="deleteRepairsByLabId">
+        delete from repair_order
+        where lab_id = #{id}
+           or device_id in (
+               select id
+               from device
+               where lab_id = #{id}
+           )
+    </delete>
+
+    <delete id="deleteReservationsByLabId">
+        delete from lab_reservation
+        where lab_id = #{id}
+    </delete>
+
+    <delete id="deleteCourseEnvironmentsByLabId">
+        delete from course_environment_request
+        where assigned_lab_id = #{id}
+    </delete>
+
+    <delete id="deleteLabSoftwareByLabId">
+        delete from lab_software
+        where lab_id = #{id}
+    </delete>
+
+    <delete id="deleteDevicesByLabId">
+        delete from device
+        where lab_id = #{id}
+    </delete>
+
+    <delete id="deleteLab">
+        delete from lab
+        where id = #{id}
+    </delete>
+</mapper>

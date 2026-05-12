@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.example.backend.mapper.ConsumableMapper">
+    <select id="listConsumables" resultType="org.example.backend.entity.ConsumableEntity">
+        select
+            id,
+            name,
+            category,
+            stock,
+            unit,
+            location,
+            warn_threshold as warnThreshold,
+            status,
+            tag_type as tagType,
+            created_at as createdAt,
+            updated_at as updatedAt
+        from consumable_inventory
+        order by
+            case tag_type
+                when 'danger' then 1
+                when 'warning' then 2
+                else 3
+            end,
+            id desc
+    </select>
+
+    <select id="getConsumable" resultType="org.example.backend.entity.ConsumableEntity">
+        select
+            id,
+            name,
+            category,
+            stock,
+            unit,
+            location,
+            warn_threshold as warnThreshold,
+            status,
+            tag_type as tagType,
+            created_at as createdAt,
+            updated_at as updatedAt
+        from consumable_inventory
+        where id = #{id}
+    </select>
+
+    <insert id="insertConsumable" useGeneratedKeys="true" keyProperty="id">
+        insert into consumable_inventory (
+            name,
+            category,
+            stock,
+            unit,
+            location,
+            warn_threshold,
+            status,
+            tag_type
+        )
+        values (
+            #{name},
+            #{category},
+            coalesce(#{stock}, 0),
+            coalesce(nullif(#{unit}, ''), '件'),
+            #{location},
+            coalesce(#{warnThreshold}, 10),
+            #{status},
+            #{tagType}
+        )
+    </insert>
+
+    <update id="updateConsumable">
+        update consumable_inventory
+        set name = #{consumable.name},
+            category = #{consumable.category},
+            stock = coalesce(#{consumable.stock}, stock),
+            unit = coalesce(nullif(#{consumable.unit}, ''), unit),
+            location = #{consumable.location},
+            warn_threshold = coalesce(#{consumable.warnThreshold}, warn_threshold),
+            status = #{consumable.status},
+            tag_type = #{consumable.tagType},
+            updated_at = now()
+        where id = #{id}
+    </update>
+
+    <delete id="deleteConsumable">
+        delete from consumable_inventory
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteAllConsumables">
+        delete from consumable_inventory
+    </delete>
+</mapper>

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.example.backend.mapper.ModuleRecordMapper">
+    <select id="listRecordJson" resultType="java.lang.String">
+        select record_json
+        from module_record
+        where module_name = #{moduleName}
+        order by id
+    </select>
+
+    <delete id="deleteByModuleName">
+        delete from module_record
+        where module_name = #{moduleName}
+    </delete>
+
+    <insert id="insertRecord">
+        insert into module_record(module_name, record_key, record_json)
+        values(#{moduleName}, #{recordKey}, #{recordJson})
+    </insert>
+</mapper>

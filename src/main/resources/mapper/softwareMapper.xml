@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.example.backend.mapper.softwareMapper">
+    <insert id="InserterLabSoftware" useGeneratedKeys="true" keyProperty="id">
+        insert into lab_software(lab_id, software_name, software_version, install_path, license_info, install_time, remark)
+        values(
+            coalesce(
+                nullif(#{labId}, 0),
+                (select l.id from lab l where l.lab_name = #{lab} or concat(l.lab_code, ' ', l.lab_name) = #{lab} limit 1),
+                1
+            ),
+            #{softwareName},
+            #{softwareVersion},
+            #{installPath},
+            #{licenseInfo},
+            #{installTime},
+            #{remark}
+        )
+    </insert>
+
+    <select id="getLabSoftware" resultType="org.example.backend.entity.softwareEntity">
+        select
+            ls.id,
+            ls.lab_id as labId,
+            case
+                when l.lab_name like concat(l.lab_code, ' %') then l.lab_name
+                else concat(l.lab_code, ' ', l.lab_name)
+            end as lab,
+            l.lab_name as labName,
+            ls.software_name as softwareName,
+            ls.software_name as name,
+            ls.software_version as softwareVersion,
+            ls.software_version as version,
+            coalesce(nullif(ls.remark, ''), '开发工具') as type,
+            ls.install_path as installPath,
+            ls.license_info as licenseInfo,
+            ls.license_info as license,
+            ls.install_time as installTime,
+            case
+                when ls.install_time is null then '待安装'
+                else '已安装'
+            end as status,
+            case
+                when ls.install_time is null then 'warning'
+                else 'success'
+            end as tagType,
+            ls.remark
+        from lab_software ls
+        left join lab l on l.id = ls.lab_id
+        order by ls.id
+    </select>
+
+    <update id="updateLabSoftware">
+        update lab_software
+        set
+            lab_id = coalesce(
+                nullif(#{labId}, 0),
+                (select l.id from lab l where l.lab_name = #{lab} or concat(l.lab_code, ' ', l.lab_name) = #{lab} limit 1),
+                lab_id
+            ),
+            software_name = #{softwareName},
+            software_version = #{softwareVersion},
+            install_path = #{installPath},
+            license_info = #{licenseInfo},
+            install_time = coalesce(#{installTime}, install_time),
+            remark = #{remark}
+        where id = #{id}
+    </update>
+
+    <delete id="deleteLabSoftware">
+        delete from lab_software
+        where id = #{id}
+    </delete>
+</mapper>

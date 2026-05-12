@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.example.backend.mapper.DevicesMapper">
+    <insert id="InserterDevices" useGeneratedKeys="true" keyProperty="id">
+        insert into device (
+            device_code,
+            device_name,
+            category,
+            lab_id,
+            location,
+            owner_user_id,
+            status,
+            health,
+            online,
+            specs,
+            purchase_date,
+            inventory_date,
+            warranty_date,
+            usage_hours,
+            maintenance
+        )
+        values(
+            #{deviceCode},
+            #{deviceName},
+            #{category},
+            #{labId},
+            #{location},
+            #{ownerUserId},
+            #{status},
+            #{health},
+            #{online},
+            #{specs},
+            #{purchaseDate},
+            #{inventoryDate},
+            #{warrantyDate},
+            #{usageHours},
+            #{maintenance}
+        )
+    </insert>
+
+    <update id="updateDevices">
+        update device
+        set
+            device_code = #{devices.deviceCode},
+            device_name = #{devices.deviceName},
+            category = #{devices.category},
+            lab_id = #{devices.labId},
+            location = #{devices.location},
+            owner_user_id = #{devices.ownerUserId},
+            status = #{devices.status},
+            health = #{devices.health},
+            online = #{devices.online},
+            specs = #{devices.specs},
+            purchase_date = #{devices.purchaseDate},
+            inventory_date = #{devices.inventoryDate},
+            warranty_date = #{devices.warrantyDate},
+            usage_hours = #{devices.usageHours},
+            maintenance = #{devices.maintenance},
+            updated_at = now()
+        where id = #{id}
+    </update>
+
+    <update id="updateDeviceRuntimeStateByNameOrCode">
+        update device
+        set
+            status = #{status},
+            health = #{health},
+            online = #{online},
+            maintenance = trim(concat(coalesce(maintenance, ''), '\n', #{maintenance})),
+            updated_at = now()
+        where device_name = #{device}
+           or device_code = #{device}
+    </update>
+
+    <delete id="deleteDevices">
+        delete from device
+        where id = #{id}
+    </delete>
+
+    <sql id="DeviceColumns">
+        d.id,
+        d.device_code as deviceCode,
+        d.device_name as deviceName,
+        d.category,
+        d.lab_id as labId,
+        l.lab_name as labName,
+        d.location,
+        d.owner_user_id as ownerUserId,
+        coalesce(u.real_name, u.username) as ownerUsername,
+        d.status,
+        d.health,
+        d.online,
+        d.specs,
+        d.purchase_date as purchaseDate,
+        d.inventory_date as inventoryDate,
+        d.warranty_date as warrantyDate,
+        d.usage_hours as usageHours,
+        d.maintenance,
+        d.created_at as createdAt,
+        d.updated_at as updatedAt
+    </sql>
+
+    <select id="getDevices" resultType="org.example.backend.entity.DevicesEntity">
+        select
+            <include refid="DeviceColumns" />
+        from device d
+        left join lab l on d.lab_id = l.id
+        left join sys_user u on u.id = d.owner_user_id
+        order by d.id
+    </select>
+
+    <select id="getDevicesById" resultType="org.example.backend.entity.DevicesEntity">
+        select
+            <include refid="DeviceColumns" />
+        from device d
+        left join lab l on d.lab_id = l.id
+        left join sys_user u on u.id = d.owner_user_id
+        where d.id = #{id}
+    </select>
+    <select id="getDevicesByLabId" resultType="org.example.backend.entity.DevicesEntity">
+    select
+        d.id,
+        d.device_code AS deviceCode,
+        d.device_name AS deviceName,
+        d.category,
+        d.lab_id AS labId,
+        l.lab_name AS labName,
+        d.location,
+        d.owner_user_id AS ownerUserId,
+        u.username AS ownerUsername,
+        d.status,
+        d.health,
+        d.online,
+        d.specs,
+        d.purchase_date AS purchaseDate,
+        d.inventory_date AS inventoryDate,
+        d.warranty_date AS warrantyDate,
+        d.usage_hours AS usageHours,
+        d.maintenance,
+        d.created_at AS createdAt,
+        d.updated_at AS updatedAt
+    from device as d
+    left join sys_user u on d.owner_user_id = u.id
+    left join lab l on d.lab_id = l.id
+    where lab_id = #{labId}
+    </select>
+</mapper>

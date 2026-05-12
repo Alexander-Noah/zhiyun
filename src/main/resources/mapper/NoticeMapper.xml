@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.example.backend.mapper.NoticeMapper">
+    <sql id="noticeColumns">
+        id,
+        title,
+        notice_type as noticeType,
+        notice_type as type,
+        target_role as targetRole,
+        target_role as target,
+        content,
+        publish_status as publishStatus,
+        publish_status as status,
+        publish_time as publishTime,
+        created_by as createdBy,
+        case
+            when publish_status = '已发布' then 'success'
+            when publish_status = '定时发布' then 'primary'
+            when publish_status = '草稿' then 'info'
+            else 'warning'
+        end as tagType,
+        created_at as createdAt,
+        updated_at as updatedAt
+    </sql>
+
+    <select id="listNotices" resultType="org.example.backend.entity.NoticeEntity">
+        select
+        <include refid="noticeColumns" />
+        from notice
+        order by coalesce(publish_time, created_at) desc, id desc
+    </select>
+
+    <select id="getNotice" resultType="org.example.backend.entity.NoticeEntity">
+        select
+        <include refid="noticeColumns" />
+        from notice
+        where id = #{id}
+    </select>
+
+    <insert id="insertNotice" useGeneratedKeys="true" keyProperty="id">
+        insert into notice (
+            title,
+            notice_type,
+            target_role,
+            content,
+            publish_status,
+            publish_time,
+            created_by
+        )
+        values (
+            #{title},
+            coalesce(nullif(#{noticeType}, ''), nullif(#{type}, ''), '系统提醒'),
+            coalesce(nullif(#{targetRole}, ''), nullif(#{target}, ''), 'labAdmin'),
+            #{content},
+            coalesce(nullif(#{publishStatus}, ''), nullif(#{status}, ''), '草稿'),
+            coalesce(#{publishTime}, now()),
+            #{createdBy}
+        )
+    </insert>
+
+    <update id="updateNotice">
+        update notice
+        set title = #{notice.title},
+            notice_type = coalesce(nullif(#{notice.noticeType}, ''), nullif(#{notice.type}, ''), notice_type),
+            target_role = coalesce(nullif(#{notice.targetRole}, ''), nullif(#{notice.target}, ''), target_role),
+            content = #{notice.content},
+            publish_status = coalesce(nullif(#{notice.publishStatus}, ''), nullif(#{notice.status}, ''), publish_status),
+            publish_time = coalesce(#{notice.publishTime}, publish_time),
+            updated_at = now()
+        where id = #{id}
+    </update>
+
+    <delete id="deleteNotice">
+        delete from notice
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteAllNotices">
+        delete from notice
+    </delete>
+</mapper>

@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.example.backend.mapper.CourseEnvironmentMapper">
+    <insert id="InserterCourseEnvironment" useGeneratedKeys="true" keyProperty="id">
+        insert into course_environment_request (
+            course_name,
+            teacher_user_id,
+            class_name,
+            use_time,
+            lab_type,
+            software_requirements,
+            system_requirements,
+            special_requirements,
+            process_status,
+            assigned_lab_id,
+            confirm_status
+        )
+        values (
+            coalesce(nullif(#{courseName}, ''), nullif(#{course}, ''), '新课程环境'),
+            coalesce(#{teacherUserId}, 3),
+            coalesce(nullif(#{className}, ''), '待填写班级'),
+            coalesce(nullif(#{useTime}, ''), '待确认'),
+            coalesce(nullif(#{labType}, ''), '计算机实验室'),
+            coalesce(nullif(#{softwareRequirements}, ''), nullif(#{software}, '')),
+            #{systemRequirements},
+            #{specialRequirements},
+            coalesce(nullif(#{processStatus}, ''), nullif(#{status}, ''), '待配置'),
+            #{assignedLabId},
+            coalesce(nullif(#{confirmStatus}, ''), '待确认')
+        )
+    </insert>
+
+    <update id="confirmCourseEnvironment">
+        update course_environment_request
+        set confirm_status = '已确认',
+            process_status = '已确认',
+            updated_at = now()
+        where id = #{id}
+    </update>
+
+    <update id="updateCourseEnvironment">
+        update course_environment_request
+        set course_name = coalesce(nullif(#{courseEnvironment.courseName}, ''), nullif(#{courseEnvironment.course}, ''), course_name),
+            teacher_user_id = coalesce(#{courseEnvironment.teacherUserId}, teacher_user_id),
+            class_name = coalesce(nullif(#{courseEnvironment.className}, ''), class_name),
+            use_time = coalesce(nullif(#{courseEnvironment.useTime}, ''), use_time),
+            lab_type = coalesce(nullif(#{courseEnvironment.labType}, ''), lab_type),
+            software_requirements = coalesce(nullif(#{courseEnvironment.softwareRequirements}, ''), nullif(#{courseEnvironment.software}, ''), software_requirements),
+            system_requirements = coalesce(#{courseEnvironment.systemRequirements}, system_requirements),
+            special_requirements = coalesce(#{courseEnvironment.specialRequirements}, special_requirements),
+            process_status = coalesce(nullif(#{courseEnvironment.processStatus}, ''), nullif(#{courseEnvironment.status}, ''), process_status),
+            assigned_lab_id = coalesce(#{courseEnvironment.assignedLabId}, assigned_lab_id),
+            confirm_status = coalesce(nullif(#{courseEnvironment.confirmStatus}, ''), confirm_status),
+            updated_at = now()
+        where id = #{id}
+    </update>
+
+    <delete id="deleteCourseEnvironment">
+        delete from course_environment_request
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteAllCourseEnvironments">
+        delete from course_environment_request
+    </delete>
+
+    <select id="getEnvironment" resultType="org.example.backend.entity.CourseEnvironmentEntity">
+        select
+            cer.id,
+            cer.course_name as courseName,
+            cer.course_name as course,
+            cer.teacher_user_id as teacherUserId,
+            u.real_name as teacherName,
+            coalesce(u.real_name, cast(cer.teacher_user_id as char)) as teacher,
+            u.username as teacherUsername,
+            cer.class_name as className,
+            cer.use_time as useTime,
+            cer.lab_type as labType,
+            cer.software_requirements as softwareRequirements,
+            cer.software_requirements as software,
+            cer.system_requirements as systemRequirements,
+            cer.special_requirements as specialRequirements,
+            cer.process_status as processStatus,
+            cer.process_status as status,
+            cer.assigned_lab_id as assignedLabId,
+            l.lab_name as assignedLabName,
+            l.lab_code as assignedLabCode,
+            cer.confirm_status as confirmStatus,
+            case
+                when cer.process_status = '已确认' or cer.confirm_status = '已确认' then 'success'
+                when cer.process_status = '配置中' then 'primary'
+                when cer.process_status = '已退回' then 'danger'
+                else 'warning'
+            end as tagType,
+            cer.created_at as createdAt,
+            cer.updated_at as updatedAt
+        from course_environment_request cer
+        left join sys_user u on u.id = cer.teacher_user_id
+        left join lab l on l.id = cer.assigned_lab_id
+        order by cer.id desc
+    </select>
+
+    <select id="getCourseEnvironment" resultType="org.example.backend.entity.CourseEnvironmentEntity">
+        select
+            cer.id,
+            cer.course_name as courseName,
+            cer.course_name as course,
+            cer.teacher_user_id as teacherUserId,
+            u.real_name as teacherName,
+            coalesce(u.real_name, cast(cer.teacher_user_id as char)) as teacher,
+            u.username as teacherUsername,
+            cer.class_name as className,
+            cer.use_time as useTime,
+            cer.lab_type as labType,
+            cer.software_requirements as softwareRequirements,
+            cer.software_requirements as software,
+            cer.system_requirements as systemRequirements,
+            cer.special_requirements as specialRequirements,
+            cer.process_status as processStatus,
+            cer.process_status as status,
+            cer.assigned_lab_id as assignedLabId,
+            l.lab_name as assignedLabName,
+            l.lab_code as assignedLabCode,
+            cer.confirm_status as confirmStatus,
+            case
+                when cer.process_status = '已确认' or cer.confirm_status = '已确认' then 'success'
+                when cer.process_status = '配置中' then 'primary'
+                when cer.process_status = '已退回' then 'danger'
+                else 'warning'
+            end as tagType,
+            cer.created_at as createdAt,
+            cer.updated_at as updatedAt
+        from course_environment_request cer
+        left join sys_user u on u.id = cer.teacher_user_id
+        left join lab l on l.id = cer.assigned_lab_id
+        where cer.id = #{id}
+    </select>
+</mapper>

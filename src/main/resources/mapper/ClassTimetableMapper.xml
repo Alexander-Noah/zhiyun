@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="org.example.backend.mapper.ClassTimetableMapper">
+
+    <select id="listTimetables" resultType="org.example.backend.entity.ClassTimetableEntity">
+        select
+        id,
+        semester,
+        row_class_name as rowClassName,
+        class_name as className,
+        weekday,
+        section_code as sectionCode,
+        section_text as sectionText,
+        start_section as startSection,
+        end_section as endSection,
+        course_name as courseName,
+        teacher,
+        week_raw as weekRaw,
+        week_text as weekText,
+        week_expanded as weekExpanded,
+        classroom,
+        create_time as createTime
+        from class_timetable
+        <where>
+            <if test="semester != null and semester != ''">
+                and semester = #{semester}
+            </if>
+
+            <if test="teacher != null and teacher != ''">
+                and teacher like concat('%', #{teacher}, '%')
+            </if>
+
+            <if test="className != null and className != ''">
+                and (
+                class_name like concat('%', #{className}, '%')
+                or row_class_name like concat('%', #{className}, '%')
+                )
+            </if>
+
+            <if test="classroom != null and classroom != ''">
+                and classroom like concat('%', #{classroom}, '%')
+            </if>
+
+            <if test="courseName != null and courseName != ''">
+                and course_name like concat('%', #{courseName}, '%')
+            </if>
+
+            <if test="keyword != null and keyword != ''">
+                and (
+                course_name like concat('%', #{keyword}, '%')
+                or teacher like concat('%', #{keyword}, '%')
+                or class_name like concat('%', #{keyword}, '%')
+                or row_class_name like concat('%', #{keyword}, '%')
+                or classroom like concat('%', #{keyword}, '%')
+                )
+            </if>
+
+            <if test="week != null">
+                and find_in_set(cast(#{week} as char), week_expanded) > 0
+            </if>
+        </where>
+        order by id desc
+        limit #{limit}
+    </select>
+
+    <select id="getSummary" resultType="java.util.Map">
+        select
+        count(*) as total,
+        count(distinct class_name) as classCount,
+        count(distinct teacher) as teacherCount,
+        count(distinct classroom) as classroomCount,
+        max(create_time) as latestSyncAt
+        from class_timetable
+    </select>
+
+    <select id="listSemesters" resultType="java.lang.String">
+        select semester
+        from class_timetable
+        where semester is not null
+        and semester != ''
+        group by semester
+        order by max(create_time) desc, semester desc
+    </select>
+
+    <update id="createClassTimetableTableIfNotExists">
+        create table if not exists class_timetable (
+        id bigint primary key auto_increment,
+        semester varchar(50) comment '学年学期',
+        row_class_name varchar(100) comment '原始行班级',
+        class_name varchar(100) comment '班级',
+        weekday varchar(20) comment '星期',
+        section_code varchar(20) comment '节次代码',
+        section_text varchar(50) comment '节次',
+        start_section int comment '开始节次',
+        end_section int comment '结束节次',
+        course_name varchar(200) comment '课程名称',
+        teacher varchar(100) comment '教师',
+        week_raw varchar(100) comment '周次原文',
+        week_text varchar(100) comment '周次',
+        week_expanded varchar(255) comment '展开周次',
+        classroom varchar(200) comment '教室',
+        create_time datetime default current_timestamp
+        ) engine=InnoDB default charset=utf8mb4
+    </update>
+
+    <delete id="deleteBySemester">
+        delete from class_timetable
+        where semester = #{semester}
+    </delete>
+
+    <insert id="insertTimetable" parameterType="org.example.backend.entity.ClassTimetableEntity">
+        insert into class_timetable (
+        semester,
+        row_class_name,
+        class_name,
+        weekday,
+        section_code,
+        section_text,
+        start_section,
+        end_section,
+        course_name,
+        teacher,
+        week_raw,
+        week_text,
+        week_expanded,
+        classroom
+        ) values (
+        #{semester},
+        #{rowClassName},
+        #{className},
+        #{weekday},
+        #{sectionCode},
+        #{sectionText},
+        #{startSection},
+        #{endSection},
+        #{courseName},
+        #{teacher},
+        #{weekRaw},
+        #{weekText},
+        #{weekExpanded},
+        #{classroom}
+        )
+    </insert>
+
+    <update id="createCredentialTableIfNotExists">
+        create table if not exists timetable_academic_credential (
+        credential_key varchar(80) primary key,
+        username_cipher text not null,
+        password_cipher text not null,
+        updated_at datetime default current_timestamp on update current_timestamp
+        ) engine=InnoDB default charset=utf8mb4
+    </update>
+
+    <select id="getCrawlerCredential" resultType="java.util.Map">
+        select
+        credential_key as credentialKey,
+        username_cipher as usernameCipher,
+        password_cipher as passwordCipher,
+        date_format(updated_at, '%Y-%m-%d %H:%i:%s') as updatedAt
+        from timetable_academic_credential
+        where credential_key = #{credentialKey}
+    </select>
+
+    <insert id="upsertCrawlerCredential">
+        insert into timetable_academic_credential (
+        credential_key,
+        username_cipher,
+        password_cipher,
+        updated_at
+        ) values (
+        #{credentialKey},
+        #{usernameCipher},
+        #{passwordCipher},
+        now()
+        )
+        on duplicate key update
+        username_cipher = values(username_cipher),
+        password_cipher = values(password_cipher),
+        updated_at = now()
+    </insert>
+
+    <delete id="deleteCrawlerCredential">
+        delete from timetable_academic_credential
+        where credential_key = #{credentialKey}
+    </delete>
+
+</mapper>

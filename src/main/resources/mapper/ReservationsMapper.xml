@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.example.backend.mapper.ReservationsMapper">
+    <insert id="insertReservation" useGeneratedKeys="true" keyProperty="id">
+        insert into lab_reservation (
+            id,
+            applicant_user_id,
+            applicant_name,
+            department,
+            contact,
+            lab_id,
+            reservation_date,
+            time_range,
+            scene,
+            attendee_count,
+            reason,
+            status,
+            conflict_flag,
+            reviewer_name,
+            review_remark
+        )
+        values (
+            #{id},
+            #{applicantUserId},
+            #{applicantName},
+            #{department},
+            #{contact},
+            coalesce(
+                #{labId},
+                (
+                    select id
+                    from lab
+                    where lab_name = #{labName}
+                       or concat(lab_code, ' ', lab_name) = #{labName}
+                       or lab_code = substring_index(#{labName}, ' ', 1)
+                    limit 1
+                ),
+                1
+            ),
+            #{reservationDate},
+            #{timeRange},
+            #{scene},
+            #{attendeeCount},
+            #{reason},
+            coalesce(#{status}, '待审核'),
+            coalesce(#{conflictFlag}, 0),
+            coalesce(#{reviewerName}, '待审核'),
+            #{reviewRemark}
+        )
+    </insert>
+    <update id="updateReservation">
+        update lab_reservation
+        set
+            applicant_user_id = #{reservation.applicantUserId},
+            applicant_name = #{reservation.applicantName},
+            department = #{reservation.department},
+            contact = #{reservation.contact},
+            lab_id = coalesce(
+                #{reservation.labId},
+                (
+                    select id
+                    from lab
+                    where lab_name = #{reservation.labName}
+                       or concat(lab_code, ' ', lab_name) = #{reservation.labName}
+                       or lab_code = substring_index(#{reservation.labName}, ' ', 1)
+                    limit 1
+                ),
+                lab_id
+            ),
+            reservation_date = #{reservation.reservationDate},
+            time_range = #{reservation.timeRange},
+            scene = #{reservation.scene},
+            attendee_count = #{reservation.attendeeCount},
+            reason = #{reservation.reason},
+            status = #{reservation.status},
+            conflict_flag = #{reservation.conflictFlag},
+            reviewer_name = #{reservation.reviewerName},
+            review_remark = #{reservation.reviewRemark},
+            updated_at = now()
+            where id = #{id}
+    </update>
+    <delete id="deleteReservation">
+        delete from lab_reservation where id = #{id}
+    </delete>
+    <delete id="deleteAllReservations">
+        delete from lab_reservation
+    </delete>
+
+    <select id="getReservations" resultType="org.example.backend.entity.ReservationsEntity">
+        select
+            r.id,
+            r.applicant_user_id as applicantUserId,
+            r.applicant_name as applicantName,
+            r.department,
+            r.contact,
+            r.lab_id as labId,
+            r.reservation_date as reservationDate,
+            r.time_range as timeRange,
+            r.scene,
+            r.attendee_count as attendeeCount,
+            r.reason,
+            r.status,
+            r.conflict_flag as conflictFlag,
+            r.reviewer_name as reviewerName,
+            r.review_remark as reviewRemark,
+            r.created_at as createdAt,
+            r.updated_at as updatedAt,
+            l.lab_name as labName,
+            l.lab_code as labCode
+        from lab_reservation r
+        left join lab l on r.lab_id = l.id
+        order by r.created_at desc
+    </select>
+    <select id="getReservation" resultType="org.example.backend.entity.ReservationsEntity">
+        select
+            r.id,
+                 r.applicant_user_id as applicantUserId,
+                 r.applicant_name as applicantName,
+                 r.department,
+                 r.contact,
+                 r.lab_id as labId,
+                 r.reservation_date as reservationDate,
+                 r.time_range as timeRange,
+                 r.scene,
+                 r.attendee_count as attendeeCount,
+                 r.reason,
+                 r.status,
+                 r.conflict_flag as conflictFlag,
+                 r.reviewer_name as reviewerName,
+                 r.review_remark as reviewRemark,
+                 r.created_at as createdAt,
+                 r.updated_at as updatedAt,
+                 l.lab_name as labName,
+                 l.lab_code as labCode
+        from lab_reservation r
+                 left join lab l on r.lab_id = l.id
+        where r.id = #{id}
+    </select>
+    <select id="countConflictingReservations" resultType="int">
+        select count(1)
+        from lab_reservation r
+        where r.lab_id = coalesce(
+                #{reservation.labId},
+                (
+                    select id
+                    from lab
+                    where lab_name = #{reservation.labName}
+                       or concat(lab_code, ' ', lab_name) = #{reservation.labName}
+                       or lab_code = substring_index(#{reservation.labName}, ' ', 1)
+                    limit 1
+                ),
+                r.lab_id
+            )
+          and r.reservation_date = #{reservation.reservationDate}
+          and r.time_range = #{reservation.timeRange}
+          and r.status not in ('已驳回', '已取消')
+          and (#{id} is null or r.id &lt;&gt; #{id})
+    </select>
+    <update id="getRejected">
+        update lab_reservation
+        set
+            status = '已驳回',
+            conflict_flag = 0,
+            reviewer_name = coalesce(nullif(#{reservation.reviewerName}, ''), '机房管理员'),
+            review_remark = coalesce(nullif(#{reservation.reviewRemark}, ''), '驳回'),
+            updated_at = now()
+        where id = #{id}
+    </update>
+    <update id="getApproved">
+            update lab_reservation
+            set
+                status = '已通过',
+                conflict_flag = 0,
+                reviewer_name = coalesce(nullif(#{reservation.reviewerName}, ''), '机房管理员'),
+                review_remark = coalesce(nullif(#{reservation.reviewRemark}, ''), '通过'),
+                updated_at = now()
+            where id = #{id}
+    </update>
+
+</mapper>

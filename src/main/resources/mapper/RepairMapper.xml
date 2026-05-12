@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.example.backend.mapper.RepairMapper">
+    <sql id="RepairColumns">
+        r.id,
+        r.order_no as ticket,
+        r.reporter_name as reporter,
+        r.contact,
+        l.lab_name as lab,
+        d.device_name as device,
+        r.fault_type as faultType,
+        r.priority_level as priority,
+        r.status,
+        case
+            when r.status = '待派单' then 'danger'
+            when r.status = '处理中' then 'warning'
+            when r.status = '待验收' then 'primary'
+            when r.status = '已完成' then 'success'
+            else 'info'
+        end as tagType,
+        r.assignee_name as assignee,
+        date_format(r.created_at, '%m-%d %H:%i') as submittedAt,
+        r.deadline,
+        r.progress,
+        r.description,
+        r.result_desc as result,
+        date_format(r.updated_at, '%m-%d %H:%i') as lastUpdate
+    </sql>
+
+    <select id="listRepairs" resultType="org.example.backend.entity.RepairEntity">
+        select
+            <include refid="RepairColumns" />
+        from repair_order r
+        left join lab l on l.id = r.lab_id
+        left join device d on d.id = r.device_id
+        order by r.id desc
+    </select>
+
+    <select id="getRepair" resultType="org.example.backend.entity.RepairEntity">
+        select
+            <include refid="RepairColumns" />
+        from repair_order r
+        left join lab l on l.id = r.lab_id
+        left join device d on d.id = r.device_id
+        where r.order_no = #{id} or cast(r.id as char) = #{id}
+        limit 1
+    </select>
+
+    <insert id="insertRepair">
+        insert into repair_order (
+            order_no,
+            reporter_name,
+            contact,
+            lab_id,
+            device_id,
+            fault_type,
+            priority_level,
+            status,
+            assignee_name,
+            deadline,
+            progress,
+            description,
+            result_desc
+        )
+        values (
+            #{ticket},
+            #{reporter},
+            #{contact},
+            coalesce(
+                (select id from lab where lab_name = #{lab} or concat(lab_code, ' ', lab_name) = #{lab} or lab_code = substring_index(#{lab}, ' ', 1) limit 1),
+                1
+            ),
+            (select id from device where device_name = #{device} or device_code = #{device} limit 1),
+            #{faultType},
+            #{priority},
+            #{status},
+            #{assignee},
+            #{deadline},
+            #{progress},
+            #{description},
+            #{result}
+        )
+    </insert>
+
+    <select id="countOpenRepairByDescriptionMarker" resultType="int">
+        select count(1)
+        from repair_order
+        where description like concat('%', #{marker}, '%')
+          and status not in ('已完成', '已关闭', '已取消')
+    </select>
+
+    <update id="updateRepair">
+        update repair_order
+        set
+            reporter_name = #{repair.reporter},
+            contact = #{repair.contact},
+            lab_id = coalesce(
+                (select id from lab where lab_name = #{repair.lab} or concat(lab_code, ' ', lab_name) = #{repair.lab} or lab_code = substring_index(#{repair.lab}, ' ', 1) limit 1),
+                lab_id
+            ),
+            device_id = coalesce(
+                (select id from device where device_name = #{repair.device} or device_code = #{repair.device} limit 1),
+                device_id
+            ),
+            fault_type = #{repair.faultType},
+            priority_level = #{repair.priority},
+            status = #{repair.status},
+            assignee_name = #{repair.assignee},
+            deadline = #{repair.deadline},
+            progress = #{repair.progress},
+            description = #{repair.description},
+            result_desc = #{repair.result},
+            updated_at = now()
+        where order_no = #{id} or cast(id as char) = #{id}
+    </update>
+
+    <update id="patchRepair">
+        update repair_order
+        set
+            status = coalesce(nullif(#{repair.status}, ''), status),
+            assignee_name = coalesce(nullif(#{repair.assignee}, ''), assignee_name),
+            priority_level = coalesce(nullif(#{repair.priority}, ''), priority_level),
+            progress = coalesce(#{repair.progress}, progress),
+            result_desc = coalesce(nullif(#{repair.result}, ''), result_desc),
+            updated_at = now()
+        where order_no = #{id} or cast(id as char) = #{id}
+    </update>
+
+    <delete id="deleteRepair">
+        delete from repair_order
+        where order_no = #{id} or cast(id as char) = #{id}
+    </delete>
+
+    <delete id="deleteAllRepairs">
+        delete from repair_order
+    </delete>
+</mapper>

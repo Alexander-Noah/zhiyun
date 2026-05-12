@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.example.backend.mapper.ScheduleAdjustmentMapper">
+    <sql id="adjustmentColumns">
+        id,
+        course,
+        original_time as originalTime,
+        target_time as targetTime,
+        reason,
+        status,
+        tag_type as tagType,
+        flow_step as flowStep,
+        reviewer,
+        teacher_name as teacherName,
+        created_at as createdAt,
+        updated_at as updatedAt
+    </sql>
+
+    <select id="listAdjustments" resultType="org.example.backend.entity.ScheduleAdjustmentEntity">
+        select
+        <include refid="adjustmentColumns" />
+        from schedule_adjustment
+        order by id desc
+    </select>
+
+    <select id="getAdjustment" resultType="org.example.backend.entity.ScheduleAdjustmentEntity">
+        select
+        <include refid="adjustmentColumns" />
+        from schedule_adjustment
+        where id = #{id}
+    </select>
+
+    <insert id="insertAdjustment" useGeneratedKeys="true" keyProperty="id">
+        insert into schedule_adjustment (
+            course,
+            original_time,
+            target_time,
+            reason,
+            status,
+            tag_type,
+            flow_step,
+            reviewer,
+            teacher_name
+        )
+        values (
+            #{course},
+            #{originalTime},
+            #{targetTime},
+            #{reason},
+            #{status},
+            #{tagType},
+            #{flowStep},
+            #{reviewer},
+            #{teacherName}
+        )
+    </insert>
+
+    <update id="updateAdjustment">
+        update schedule_adjustment
+        set course = #{adjustment.course},
+            original_time = #{adjustment.originalTime},
+            target_time = #{adjustment.targetTime},
+            reason = #{adjustment.reason},
+            status = #{adjustment.status},
+            tag_type = #{adjustment.tagType},
+            flow_step = #{adjustment.flowStep},
+            reviewer = #{adjustment.reviewer},
+            teacher_name = #{adjustment.teacherName},
+            updated_at = now()
+        where id = #{id}
+    </update>
+
+    <update id="patchAdjustment">
+        update schedule_adjustment
+        set status = #{status},
+            tag_type = #{tagType},
+            flow_step = #{flowStep},
+            updated_at = now()
+        where id = #{id}
+    </update>
+</mapper>
