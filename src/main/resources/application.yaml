@@ -29,9 +29,9 @@ speech:
 timetable:
   crawler:
     python: ${TIMETABLE_CRAWLER_PYTHON:python}
-    script-path: ${TIMETABLE_CRAWLER_SCRIPT:../Python/crawl_school_timetable.py}
-    import-script-path: ${TIMETABLE_IMPORT_SCRIPT:../Python/parse_and_import_timetable.py}
-    working-dir: ${TIMETABLE_CRAWLER_WORKDIR:../Python}
+    script-path: ${TIMETABLE_CRAWLER_SCRIPT:Python/crawl_school_timetable.py}
+    import-script-path: ${TIMETABLE_IMPORT_SCRIPT:Python/parse_and_import_timetable.py}
+    working-dir: ${TIMETABLE_CRAWLER_WORKDIR:Python}
     timeout-seconds: ${TIMETABLE_CRAWLER_TIMEOUT_SECONDS:600}
     headless: ${TIMETABLE_CRAWLER_HEADLESS:true}
 

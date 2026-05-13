@@ -145,6 +145,137 @@
         )
     </insert>
 
+    <update id="createCrawlerConfigTableIfNotExists">
+        create table if not exists timetable_crawler_config (
+        config_key varchar(80) primary key,
+        schedule_enabled tinyint(1) not null default 0,
+        cron_expression varchar(120) not null,
+        semester_start_date varchar(20),
+        updated_at datetime default current_timestamp on update current_timestamp
+        ) engine=InnoDB default charset=utf8mb4
+    </update>
+
+    <select id="getCrawlerConfig" resultType="java.util.Map">
+        select
+        config_key as configKey,
+        schedule_enabled as scheduleEnabled,
+        cron_expression as cron,
+        semester_start_date as semesterStartDate,
+        date_format(updated_at, '%Y-%m-%d %H:%i:%s') as updatedAt
+        from timetable_crawler_config
+        where config_key = #{configKey}
+    </select>
+
+    <insert id="upsertCrawlerConfig">
+        insert into timetable_crawler_config (
+        config_key,
+        schedule_enabled,
+        cron_expression,
+        semester_start_date,
+        updated_at
+        ) values (
+        #{configKey},
+        #{scheduleEnabled},
+        #{cronExpression},
+        #{semesterStartDate},
+        now()
+        )
+        on duplicate key update
+        schedule_enabled = values(schedule_enabled),
+        cron_expression = values(cron_expression),
+        semester_start_date = values(semester_start_date),
+        updated_at = now()
+    </insert>
+
+    <update id="createCrawlerTaskTableIfNotExists">
+        create table if not exists timetable_crawler_task (
+        id bigint primary key,
+        trigger_type varchar(20) not null,
+        status varchar(20) not null,
+        scope varchar(50),
+        source varchar(80),
+        success_account varchar(120),
+        attempts int default 0,
+        updated_count int default 0,
+        started_at datetime,
+        finished_at datetime,
+        error_message text,
+        output mediumtext,
+        log_path varchar(500),
+        created_at datetime default current_timestamp
+        ) engine=InnoDB default charset=utf8mb4
+    </update>
+
+    <select id="listCrawlerTasks" resultType="java.util.Map">
+        select
+        id,
+        trigger_type as triggerType,
+        status,
+        scope,
+        source,
+        success_account as successAccount,
+        attempts,
+        updated_count as updatedCount,
+        date_format(started_at, '%Y-%m-%d %H:%i:%s') as startedAt,
+        date_format(finished_at, '%Y-%m-%d %H:%i:%s') as finishedAt,
+        error_message as error,
+        output,
+        log_path as logPath
+        from timetable_crawler_task
+        order by started_at desc, id desc
+        limit #{limit}
+    </select>
+
+    <insert id="insertCrawlerTask" parameterType="java.util.Map">
+        insert into timetable_crawler_task (
+        id,
+        trigger_type,
+        status,
+        scope,
+        source,
+        success_account,
+        attempts,
+        updated_count,
+        started_at,
+        finished_at,
+        error_message,
+        output,
+        log_path
+        ) values (
+        #{id},
+        #{triggerType},
+        #{status},
+        #{scope},
+        #{source},
+        #{successAccount},
+        #{attempts},
+        #{updatedCount},
+        #{startedAt},
+        #{finishedAt},
+        #{error},
+        #{output},
+        #{logPath}
+        )
+    </insert>
+
+    <update id="updateCrawlerTask" parameterType="java.util.Map">
+        update timetable_crawler_task
+        set
+        status = #{status},
+        success_account = #{successAccount},
+        attempts = #{attempts},
+        updated_count = #{updatedCount},
+        finished_at = #{finishedAt},
+        error_message = #{error},
+        output = #{output},
+        log_path = #{logPath}
+        where id = #{id}
+    </update>
+
+    <delete id="clearCrawlerTasks">
+        delete from timetable_crawler_task
+    </delete>
+
     <update id="createCredentialTableIfNotExists">
         create table if not exists timetable_academic_credential (
         credential_key varchar(80) primary key,

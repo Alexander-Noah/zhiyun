@@ -1,22 +1,29 @@
 package org.example.backend.service.impl;
 
+import jakarta.annotation.PostConstruct;
+import lombok.extern.slf4j.Slf4j;
 import org.example.backend.entity.AcademicCredentialView;
 import org.example.backend.entity.ClassTimetableEntity;
 import org.example.backend.mapper.ClassTimetableMapper;
 import org.example.backend.service.ClassTimetableService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
+import org.springframework.scheduling.support.CronExpression;
+import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -27,30 +34,55 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
+@Slf4j
 public class ClassTimetableServiceImpl implements ClassTimetableService {
     private static final int DEFAULT_LIMIT = 500;
     private static final int MAX_LIMIT = 5000;
+    private static final int DEFAULT_TASK_LIMIT = 50;
+    private static final int MAX_TASK_LIMIT = 200;
     private static final int IV_LENGTH = 12;
     private static final int GCM_TAG_LENGTH = 128;
     private static final String CRAWLER_CREDENTIAL_KEY = "lab-admin-class-timetable";
+    private static final String CRAWLER_CONFIG_KEY = "lab-admin-class-timetable";
+    private static final String DEFAULT_CRON = "0 0 */6 * * *";
+    private static final String DEFAULT_SEMESTER_START_DATE = "2026-03-02";
     private static final String DEFAULT_SECRET = "zhiyun-lab-timetable-dev-secret-change-me";
 
     private final SecureRandom secureRandom = new SecureRandom();
     private final ClassTimetableMapper classTimetableMapper;
     private final Environment environment;
     private final SecretKeySpec secretKey;
+    private final ThreadPoolTaskScheduler taskScheduler;
+    private final AtomicBoolean crawlerRunning = new AtomicBoolean(false);
+    private final Object schedulerMonitor = new Object();
+    private ScheduledFuture<?> scheduledCrawler;
 
     public ClassTimetableServiceImpl(
             ClassTimetableMapper classTimetableMapper,
             Environment environment,
+            ThreadPoolTaskScheduler classTimetableTaskScheduler,
             @Value("${timetable.crawler.credential-secret:${ACADEMIC_CREDENTIAL_SECRET:}}") String secret
     ) {
         this.classTimetableMapper = classTimetableMapper;
         this.environment = environment;
+        this.taskScheduler = classTimetableTaskScheduler;
         this.secretKey = buildSecretKey(isBlank(secret) ? DEFAULT_SECRET : secret);
+    }
+
+    @PostConstruct
+    public void initializeCrawlerScheduler() {
+        try {
+            ensureCrawlerTables();
+            ensureDefaultCrawlerConfig();
+            rescheduleCrawler();
+        } catch (RuntimeException exception) {
+            log.warn("课表定时抓取初始化失败，保存配置后会再次尝试初始化", exception);
+        }
     }
 
     @Override
@@ -93,16 +125,71 @@ public class ClassTimetableServiceImpl implements ClassTimetableService {
     }
 
     @Override
+    public Map<String, Object> getCrawlerConfig() {
+        ensureCrawlerTables();
+        ensureDefaultCrawlerConfig();
+        Map<String, Object> config = normalizeCrawlerConfig(classTimetableMapper.getCrawlerConfig(CRAWLER_CONFIG_KEY));
+        config.put("nextRunAt", computeNextRunAt(config));
+        config.put("running", crawlerRunning.get());
+        return config;
+    }
+
+    @Override
+    public Map<String, Object> saveCrawlerConfig(Map<String, Object> payload) {
+        ensureCrawlerTables();
+        boolean scheduleEnabled = toBoolean(payload == null ? null : payload.get("scheduleEnabled"), true);
+        String cron = normalizeCron(stringValue(payload == null ? null : payload.get("cron")));
+        String semesterStartDate = normalizeSemesterStartDate(stringValue(payload == null ? null : payload.get("semesterStartDate")));
+
+        classTimetableMapper.upsertCrawlerConfig(CRAWLER_CONFIG_KEY, scheduleEnabled, cron, semesterStartDate);
+        rescheduleCrawler();
+        return getCrawlerConfig();
+    }
+
+    @Override
+    public List<Map<String, Object>> listCrawlerTasks(Integer limit) {
+        ensureCrawlerTables();
+        List<Map<String, Object>> tasks = classTimetableMapper.listCrawlerTasks(normalizeTaskLimit(limit));
+        for (Map<String, Object> task : tasks) {
+            if (isBlank(stringValue(task.get("output"))) && !isBlank(stringValue(task.get("logPath")))) {
+                task.put("output", readLogTail(Path.of(stringValue(task.get("logPath")))));
+            }
+        }
+        return tasks;
+    }
+
+    @Override
+    public void clearCrawlerTasks() {
+        ensureCrawlerTables();
+        classTimetableMapper.clearCrawlerTasks();
+    }
+
+    @Override
     public Map<String, Object> triggerCrawler() {
+        return runCrawlerTask("manual");
+    }
+
+    private Map<String, Object> runCrawlerTask(String triggerType) {
+        if (!crawlerRunning.compareAndSet(false, true)) {
+            throw new IllegalStateException("课表抓取任务正在执行，请稍后再试");
+        }
+        try {
+            return executeCrawlerTask(triggerType);
+        } finally {
+            crawlerRunning.set(false);
+        }
+    }
+
+    private Map<String, Object> executeCrawlerTask(String triggerType) {
         StoredCrawlerCredential credential = readStoredCrawlerCredential();
         if (credential == null) {
             throw new IllegalArgumentException("请先在课表抓取页面保存教务系统账号和密码");
         }
 
         String python = environment.getProperty("timetable.crawler.python", "python");
-        String scriptPathText = environment.getProperty("timetable.crawler.script-path", "../Python/crawl_school_timetable.py");
-        String importScriptPathText = environment.getProperty("timetable.crawler.import-script-path", "../Python/parse_and_import_timetable.py");
-        String workingDirText = environment.getProperty("timetable.crawler.working-dir", "../Python");
+        String scriptPathText = environment.getProperty("timetable.crawler.script-path", "Python/crawl_school_timetable.py");
+        String importScriptPathText = environment.getProperty("timetable.crawler.import-script-path", "Python/parse_and_import_timetable.py");
+        String workingDirText = environment.getProperty("timetable.crawler.working-dir", "Python");
         long timeoutSeconds = environment.getProperty("timetable.crawler.timeout-seconds", Long.class, 600L);
 
         Path scriptPath = resolveConfiguredScriptPath(scriptPathText);
@@ -116,13 +203,19 @@ public class ClassTimetableServiceImpl implements ClassTimetableService {
         }
 
         Path logPath = buildCrawlerLogPath();
+        Map<String, Object> task = insertStartedCrawlerTask(triggerType, credential, logPath);
+        Map<String, Object> crawlerConfig = getCrawlerConfig();
 
         Map<String, String> crawlerEnv = new HashMap<>();
         crawlerEnv.put("TIMETABLE_USERNAME", credential.username());
         crawlerEnv.put("TIMETABLE_PASSWORD", credential.password());
         crawlerEnv.put("TIMETABLE_HEADLESS", environment.getProperty("timetable.crawler.headless", "true"));
+        crawlerEnv.put("TIMETABLE_SEMESTER_START_DATE", stringValue(crawlerConfig.get("semesterStartDate")));
 
         Map<String, Object> result = new LinkedHashMap<>();
+        result.put("taskId", task.get("id"));
+        result.put("triggerType", triggerType);
+        result.put("successAccount", maskUsername(credential.username()));
         result.put("scriptPath", scriptPath.toString());
         result.put("importScriptPath", importScriptPath.toString());
         result.put("workingDir", workingDir.toString());
@@ -160,13 +253,277 @@ public class ClassTimetableServiceImpl implements ClassTimetableService {
             result.put("output", readLogTail(logPath));
             result.put("summary", getSummary());
             result.put("finishedAt", LocalDateTime.now().toString());
+            updateFinishedCrawlerTask(task, result, credential, logPath);
             return result;
         } catch (IOException exception) {
+            updateFailedCrawlerTask(task, credential, logPath, "无法启动课表爬虫脚本：" + exception.getMessage());
             throw new IllegalStateException("无法启动课表爬虫脚本：" + exception.getMessage(), exception);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
+            updateFailedCrawlerTask(task, credential, logPath, "课表爬虫脚本执行被中断");
             throw new IllegalStateException("课表爬虫脚本执行被中断", exception);
+        } catch (RuntimeException exception) {
+            updateFailedCrawlerTask(task, credential, logPath, exception.getMessage());
+            throw exception;
         }
+    }
+
+    private void runScheduledCrawlerSafely() {
+        try {
+            runCrawlerTask("scheduled");
+        } catch (IllegalStateException exception) {
+            if (exception.getMessage() != null && exception.getMessage().contains("正在执行")) {
+                insertSimpleCrawlerTask("scheduled", "skipped", "已有课表抓取任务正在执行，本次定时触发已跳过");
+                return;
+            }
+            insertSimpleCrawlerTask("scheduled", "failed", exception.getMessage());
+            log.warn("课表定时抓取执行失败", exception);
+        } catch (RuntimeException exception) {
+            insertSimpleCrawlerTask("scheduled", "failed", exception.getMessage());
+            log.warn("课表定时抓取执行失败", exception);
+        }
+    }
+
+    private void rescheduleCrawler() {
+        synchronized (schedulerMonitor) {
+            if (scheduledCrawler != null) {
+                scheduledCrawler.cancel(false);
+                scheduledCrawler = null;
+            }
+
+            Map<String, Object> config = normalizeCrawlerConfig(classTimetableMapper.getCrawlerConfig(CRAWLER_CONFIG_KEY));
+            if (!toBoolean(config.get("scheduleEnabled"), true)) {
+                return;
+            }
+
+            String cron = normalizeCron(stringValue(config.get("cron")));
+            scheduledCrawler = taskScheduler.schedule(this::runScheduledCrawlerSafely, new CronTrigger(cron));
+        }
+    }
+
+    private Map<String, Object> insertStartedCrawlerTask(
+            String triggerType,
+            StoredCrawlerCredential credential,
+            Path logPath
+    ) {
+        ensureCrawlerTables();
+        Map<String, Object> task = new LinkedHashMap<>();
+        task.put("id", nextTaskId());
+        task.put("triggerType", triggerType);
+        task.put("status", "running");
+        task.put("scope", "class");
+        task.put("source", "class-all");
+        task.put("successAccount", maskUsername(credential.username()));
+        task.put("attempts", 0);
+        task.put("updatedCount", 0);
+        task.put("startedAt", LocalDateTime.now());
+        task.put("finishedAt", null);
+        task.put("error", "");
+        task.put("output", "");
+        task.put("logPath", logPath.toString());
+        classTimetableMapper.insertCrawlerTask(task);
+        return task;
+    }
+
+    private void updateFinishedCrawlerTask(
+            Map<String, Object> task,
+            Map<String, Object> result,
+            StoredCrawlerCredential credential,
+            Path logPath
+    ) {
+        try {
+            String status = stringValue(result.get("status"));
+            Map<String, Object> update = new LinkedHashMap<>();
+            update.put("id", task.get("id"));
+            update.put("status", isBlank(status) ? "unknown" : status);
+            update.put("successAccount", maskUsername(credential.username()));
+            update.put("attempts", result.get("crawlExitCode") == null ? 0 : 1);
+            update.put("updatedCount", extractUpdatedCount(result));
+            update.put("finishedAt", LocalDateTime.now());
+            update.put("error", "success".equals(status) ? "" : stringValue(result.get("message")));
+            update.put("output", stringValue(result.get("output")));
+            update.put("logPath", logPath.toString());
+            classTimetableMapper.updateCrawlerTask(update);
+        } catch (RuntimeException exception) {
+            log.warn("更新课表抓取任务记录失败", exception);
+        }
+    }
+
+    private void updateFailedCrawlerTask(
+            Map<String, Object> task,
+            StoredCrawlerCredential credential,
+            Path logPath,
+            String error
+    ) {
+        try {
+            Map<String, Object> update = new LinkedHashMap<>();
+            update.put("id", task.get("id"));
+            update.put("status", "failed");
+            update.put("successAccount", credential == null ? "" : maskUsername(credential.username()));
+            update.put("attempts", 1);
+            update.put("updatedCount", 0);
+            update.put("finishedAt", LocalDateTime.now());
+            update.put("error", isBlank(error) ? "课表抓取失败" : error);
+            update.put("output", readLogTail(logPath));
+            update.put("logPath", logPath.toString());
+            classTimetableMapper.updateCrawlerTask(update);
+        } catch (RuntimeException exception) {
+            log.warn("更新课表抓取失败记录失败", exception);
+        }
+    }
+
+    private void insertSimpleCrawlerTask(String triggerType, String status, String error) {
+        try {
+            ensureCrawlerTables();
+            StoredCrawlerCredential credential = null;
+            try {
+                credential = readStoredCrawlerCredential();
+            } catch (RuntimeException ignored) {
+            }
+            Map<String, Object> task = new LinkedHashMap<>();
+            task.put("id", nextTaskId());
+            task.put("triggerType", triggerType);
+            task.put("status", status);
+            task.put("scope", "class");
+            task.put("source", "class-all");
+            task.put("successAccount", credential == null ? "" : maskUsername(credential.username()));
+            task.put("attempts", 0);
+            task.put("updatedCount", 0);
+            task.put("startedAt", LocalDateTime.now());
+            task.put("finishedAt", LocalDateTime.now());
+            task.put("error", isBlank(error) ? status : error);
+            task.put("output", "");
+            task.put("logPath", "");
+            classTimetableMapper.insertCrawlerTask(task);
+        } catch (RuntimeException exception) {
+            log.warn("写入课表定时抓取任务记录失败", exception);
+        }
+    }
+
+    private int extractUpdatedCount(Map<String, Object> result) {
+        Object javaImportCount = result.get("javaImportCount");
+        if (javaImportCount instanceof Number number) {
+            return number.intValue();
+        }
+        Object summary = result.get("summary");
+        if (summary instanceof Map<?, ?> summaryMap) {
+            Object total = summaryMap.get("total");
+            if (total instanceof Number number) {
+                return number.intValue();
+            }
+            try {
+                return Integer.parseInt(stringValue(total));
+            } catch (NumberFormatException ignored) {
+                return 0;
+            }
+        }
+        return 0;
+    }
+
+    private void ensureCrawlerTables() {
+        classTimetableMapper.createCrawlerConfigTableIfNotExists();
+        classTimetableMapper.createCrawlerTaskTableIfNotExists();
+    }
+
+    private void ensureDefaultCrawlerConfig() {
+        if (classTimetableMapper.getCrawlerConfig(CRAWLER_CONFIG_KEY) == null) {
+            classTimetableMapper.upsertCrawlerConfig(
+                    CRAWLER_CONFIG_KEY,
+                    true,
+                    DEFAULT_CRON,
+                    DEFAULT_SEMESTER_START_DATE
+            );
+        }
+    }
+
+    private Map<String, Object> normalizeCrawlerConfig(Map<String, Object> row) {
+        Map<String, Object> config = new LinkedHashMap<>();
+        config.put("configKey", CRAWLER_CONFIG_KEY);
+        config.put("scheduleEnabled", true);
+        config.put("cron", DEFAULT_CRON);
+        config.put("semesterStartDate", DEFAULT_SEMESTER_START_DATE);
+        config.put("updatedAt", "");
+        if (row != null) {
+            config.put("scheduleEnabled", toBoolean(row.get("scheduleEnabled"), true));
+            config.put("cron", isBlank(stringValue(row.get("cron"))) ? DEFAULT_CRON : stringValue(row.get("cron")));
+            config.put(
+                    "semesterStartDate",
+                    isBlank(stringValue(row.get("semesterStartDate")))
+                            ? DEFAULT_SEMESTER_START_DATE
+                            : stringValue(row.get("semesterStartDate"))
+            );
+            config.put("updatedAt", stringValue(row.get("updatedAt")));
+        }
+        return config;
+    }
+
+    private String computeNextRunAt(Map<String, Object> config) {
+        if (!toBoolean(config.get("scheduleEnabled"), true)) {
+            return "";
+        }
+        try {
+            LocalDateTime next = CronExpression.parse(stringValue(config.get("cron"))).next(LocalDateTime.now());
+            return next == null ? "" : next.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        } catch (IllegalArgumentException exception) {
+            return "";
+        }
+    }
+
+    private String normalizeCron(String value) {
+        String cron = trimToNull(value);
+        if (cron == null) {
+            throw new IllegalArgumentException("请设置抓取频率");
+        }
+        try {
+            CronExpression.parse(cron);
+            return cron;
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("抓取时间设置不合法：" + exception.getMessage(), exception);
+        }
+    }
+
+    private String normalizeSemesterStartDate(String value) {
+        String semesterStartDate = trimToNull(value);
+        if (semesterStartDate == null) {
+            throw new IllegalArgumentException("请选择学期起始时间");
+        }
+        try {
+            LocalDate.parse(semesterStartDate);
+            return semesterStartDate;
+        } catch (RuntimeException exception) {
+            throw new IllegalArgumentException("学期起始时间格式应为 YYYY-MM-DD", exception);
+        }
+    }
+
+    private boolean toBoolean(Object value, boolean defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        if (value instanceof Boolean booleanValue) {
+            return booleanValue;
+        }
+        if (value instanceof Number number) {
+            return number.intValue() != 0;
+        }
+        String text = stringValue(value).trim();
+        if (text.equalsIgnoreCase("true") || text.equals("1") || text.equals("是")) {
+            return true;
+        }
+        if (text.equalsIgnoreCase("false") || text.equals("0") || text.equals("否")) {
+            return false;
+        }
+        return defaultValue;
+    }
+
+    private int normalizeTaskLimit(Integer limit) {
+        if (limit == null || limit <= 0) {
+            return DEFAULT_TASK_LIMIT;
+        }
+        return Math.min(limit, MAX_TASK_LIMIT);
+    }
+
+    private long nextTaskId() {
+        return System.currentTimeMillis() * 1000 + secureRandom.nextInt(1000);
     }
 
     private int importStandardCsv(Path workingDir, Path logPath) {
@@ -369,6 +726,8 @@ public class ClassTimetableServiceImpl implements ClassTimetableService {
     ) throws IOException, InterruptedException {
         ProcessBuilder processBuilder = new ProcessBuilder(python, scriptPath.toString());
         processBuilder.directory(workingDir.toFile());
+        processBuilder.environment().put("PYTHONIOENCODING", "utf-8");
+        processBuilder.environment().put("PYTHONUTF8", "1");
         processBuilder.environment().putAll(extraEnv);
         processBuilder.redirectErrorStream(true);
         if (appendLog) {
@@ -424,14 +783,24 @@ public class ClassTimetableServiceImpl implements ClassTimetableService {
 
     private String readLogTail(Path logPath) {
         try {
-            String content = Files.readString(logPath, StandardCharsets.UTF_8);
-            if (content.length() <= 3000) {
-                return content;
-            }
-            return content.substring(content.length() - 3000);
+            return tailText(Files.readString(logPath, StandardCharsets.UTF_8));
         } catch (IOException exception) {
+            try {
+                return tailText(Files.readString(logPath, Charset.forName("GBK")));
+            } catch (IOException ignored) {
+                return "";
+            }
+        }
+    }
+
+    private String tailText(String content) {
+        if (content == null) {
             return "";
         }
+        if (content.length() <= 3000) {
+            return content;
+        }
+        return content.substring(content.length() - 3000);
     }
 
     private String encrypt(String value) {

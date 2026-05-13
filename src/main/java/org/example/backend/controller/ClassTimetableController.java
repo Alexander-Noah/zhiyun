@@ -62,6 +62,28 @@ public class ClassTimetableController {
         return Result.success(classTimetableService.triggerCrawler());
     }
 
+    @GetMapping("/class-timetables/crawler-config")
+    public Result getCrawlerConfig() {
+        return Result.success(classTimetableService.getCrawlerConfig());
+    }
+
+    @PostMapping("/class-timetables/crawler-config")
+    public Result saveCrawlerConfig(@RequestBody Map<String, Object> payload) {
+        log.info("保存课表定时抓取配置");
+        return Result.success(classTimetableService.saveCrawlerConfig(payload));
+    }
+
+    @GetMapping("/class-timetables/crawler-tasks")
+    public Result listCrawlerTasks(@RequestParam(required = false) Integer limit) {
+        return Result.success(classTimetableService.listCrawlerTasks(limit));
+    }
+
+    @DeleteMapping("/class-timetables/crawler-tasks")
+    public Result clearCrawlerTasks() {
+        classTimetableService.clearCrawlerTasks();
+        return Result.success(true);
+    }
+
     @GetMapping("/class-timetables/credential")
     public Result getCrawlerCredential() {
         return Result.success(classTimetableService.getCrawlerCredential());

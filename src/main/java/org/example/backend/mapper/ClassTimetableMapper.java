@@ -31,6 +31,27 @@ public interface ClassTimetableMapper {
 
     int insertTimetable(ClassTimetableEntity entity);
 
+    void createCrawlerConfigTableIfNotExists();
+
+    Map<String, Object> getCrawlerConfig(@Param("configKey") String configKey);
+
+    int upsertCrawlerConfig(
+            @Param("configKey") String configKey,
+            @Param("scheduleEnabled") Boolean scheduleEnabled,
+            @Param("cronExpression") String cronExpression,
+            @Param("semesterStartDate") String semesterStartDate
+    );
+
+    void createCrawlerTaskTableIfNotExists();
+
+    List<Map<String, Object>> listCrawlerTasks(@Param("limit") Integer limit);
+
+    int insertCrawlerTask(Map<String, Object> task);
+
+    int updateCrawlerTask(Map<String, Object> task);
+
+    int clearCrawlerTasks();
+
     void createCredentialTableIfNotExists();
 
     Map<String, Object> getCrawlerCredential(@Param("credentialKey") String credentialKey);
