@@ -1,6 +1,8 @@
 package org.example.backend.controller;
 
 import lombok.extern.slf4j.Slf4j;
+import org.example.backend.entity.DeviceInventoryRecordEntity;
+import org.example.backend.entity.DeviceTransferRecordEntity;
 import org.example.backend.result.Result;
 import org.example.backend.entity.DevicesEntity;
 import org.example.backend.service.DevicesService;
@@ -32,6 +34,36 @@ public class DevicesController {
     @GetMapping("/devices/{id:\\d+}")
     public Result getDevicesById(@PathVariable Long id) {
         return Result.success("get device success", devicesService.getDevicesById(id));
+    }
+
+    @GetMapping("/device-inventory-records")
+    public Result listInventoryRecords(@RequestParam(required = false) Long deviceId) {
+        return Result.success("list device inventory records success", devicesService.listInventoryRecords(deviceId));
+    }
+
+    @GetMapping("/devices/{id:\\d+}/inventory-records")
+    public Result listDeviceInventoryRecords(@PathVariable Long id) {
+        return Result.success("list device inventory records success", devicesService.listInventoryRecords(id));
+    }
+
+    @PostMapping("/devices/{id:\\d+}/inventory")
+    public Result recordDeviceInventory(@PathVariable Long id, @RequestBody DeviceInventoryRecordEntity record) {
+        return Result.success("record device inventory success", devicesService.recordDeviceInventory(id, record));
+    }
+
+    @GetMapping("/device-transfer-records")
+    public Result listTransferRecords(@RequestParam(required = false) Long deviceId) {
+        return Result.success("list device transfer records success", devicesService.listTransferRecords(deviceId));
+    }
+
+    @GetMapping("/devices/{id:\\d+}/transfer-records")
+    public Result listDeviceTransferRecords(@PathVariable Long id) {
+        return Result.success("list device transfer records success", devicesService.listTransferRecords(id));
+    }
+
+    @PostMapping("/devices/{id:\\d+}/transfer")
+    public Result transferDevice(@PathVariable Long id, @RequestBody DeviceTransferRecordEntity record) {
+        return Result.success("transfer device success", devicesService.transferDevice(id, record));
     }
 
     @PutMapping("/devices/{id:\\d+}")

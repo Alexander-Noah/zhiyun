@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.example.backend.mapper.DeviceTransferRecordMapper">
+    <update id="createTableIfNotExists">
+        create table if not exists device_transfer_record (
+            id bigint primary key auto_increment,
+            device_id bigint not null,
+            device_code varchar(80),
+            device_name varchar(160),
+            transfer_type varchar(40) not null,
+            from_lab_id bigint,
+            from_lab_name varchar(160),
+            to_lab_id bigint,
+            to_lab_name varchar(160),
+            from_owner_user_id bigint,
+            from_owner_name varchar(100),
+            to_owner_user_id bigint,
+            to_owner_name varchar(100),
+            from_location varchar(200),
+            to_location varchar(200),
+            reason varchar(500),
+            operator_name varchar(100),
+            transfer_at datetime not null,
+            created_at datetime default current_timestamp,
+            index idx_device_transfer_record_device_id (device_id),
+            index idx_device_transfer_record_transfer_at (transfer_at),
+            constraint fk_device_transfer_record_device
+                foreign key (device_id) references device(id)
+                on delete cascade
+        ) engine=InnoDB default charset=utf8mb4
+    </update>
+
+    <insert id="insertRecord" useGeneratedKeys="true" keyProperty="id">
+        insert into device_transfer_record (
+            device_id,
+            device_code,
+            device_name,
+            transfer_type,
+            from_lab_id,
+            from_lab_name,
+            to_lab_id,
+            to_lab_name,
+            from_owner_user_id,
+            from_owner_name,
+            to_owner_user_id,
+            to_owner_name,
+            from_location,
+            to_location,
+            reason,
+            operator_name,
+            transfer_at
+        ) values (
+            #{deviceId},
+            #{deviceCode},
+            #{deviceName},
+            #{transferType},
+            #{fromLabId},
+            #{fromLabName},
+            #{toLabId},
+            #{toLabName},
+            #{fromOwnerUserId},
+            #{fromOwnerName},
+            #{toOwnerUserId},
+            #{toOwnerName},
+            #{fromLocation},
+            #{toLocation},
+            #{reason},
+            #{operatorName},
+            #{transferAt}
+        )
+    </insert>
+
+    <sql id="TransferRecordColumns">
+        id,
+        device_id as deviceId,
+        device_code as deviceCode,
+        device_name as deviceName,
+        transfer_type as transferType,
+        from_lab_id as fromLabId,
+        from_lab_name as fromLabName,
+        to_lab_id as toLabId,
+        to_lab_name as toLabName,
+        from_owner_user_id as fromOwnerUserId,
+        from_owner_name as fromOwnerName,
+        to_owner_user_id as toOwnerUserId,
+        to_owner_name as toOwnerName,
+        from_location as fromLocation,
+        to_location as toLocation,
+        reason,
+        operator_name as operatorName,
+        date_format(transfer_at, '%Y-%m-%d %H:%i:%s') as transferAt,
+        created_at as createdAt
+    </sql>
+
+    <select id="listRecords" resultType="org.example.backend.entity.DeviceTransferRecordEntity">
+        select
+            <include refid="TransferRecordColumns" />
+        from device_transfer_record
+        <where>
+            <if test="deviceId != null">
+                device_id = #{deviceId}
+            </if>
+        </where>
+        order by transfer_at desc, id desc
+    </select>
+
+    <select id="listRecordsByDeviceId" resultType="org.example.backend.entity.DeviceTransferRecordEntity">
+        select
+            <include refid="TransferRecordColumns" />
+        from device_transfer_record
+        where device_id = #{deviceId}
+        order by transfer_at desc, id desc
+    </select>
+</mapper>

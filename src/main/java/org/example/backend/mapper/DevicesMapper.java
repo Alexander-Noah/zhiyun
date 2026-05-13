@@ -24,6 +24,21 @@ public interface DevicesMapper {
             @Param("maintenance") String maintenance
     );
 
+    int updateInventoryState(
+            @Param("id") Long id,
+            @Param("status") String status,
+            @Param("health") String health,
+            @Param("online") Boolean online,
+            @Param("inventoryDate") String inventoryDate
+    );
+
+    int updateTransferState(
+            @Param("id") Long id,
+            @Param("labId") Long labId,
+            @Param("ownerUserId") Long ownerUserId,
+            @Param("location") String location
+    );
+
     void deleteDevices(@Param("id") Long id);
 
     List<DevicesEntity> getDevicesByLabId(Integer labId);

@@ -74,6 +74,27 @@
            or device_code = #{device}
     </update>
 
+    <update id="updateInventoryState">
+        update device
+        set
+            status = #{status},
+            health = #{health},
+            online = #{online},
+            inventory_date = #{inventoryDate},
+            updated_at = now()
+        where id = #{id}
+    </update>
+
+    <update id="updateTransferState">
+        update device
+        set
+            lab_id = #{labId},
+            owner_user_id = #{ownerUserId},
+            location = #{location},
+            updated_at = now()
+        where id = #{id}
+    </update>
+
     <delete id="deleteDevices">
         delete from device
         where id = #{id}

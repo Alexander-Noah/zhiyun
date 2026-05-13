@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.example.backend.mapper.DeviceInventoryRecordMapper">
+    <update id="createTableIfNotExists">
+        create table if not exists device_inventory_record (
+            id bigint primary key auto_increment,
+            device_id bigint not null,
+            device_code varchar(80),
+            device_name varchar(160),
+            inspector_name varchar(100) not null,
+            inspected_at datetime not null,
+            result_status varchar(40) not null,
+            is_normal tinyint(1) not null default 1,
+            is_missing tinyint(1) not null default 0,
+            is_damaged tinyint(1) not null default 0,
+            remark text,
+            created_at datetime default current_timestamp,
+            index idx_device_inventory_record_device_id (device_id),
+            constraint fk_device_inventory_record_device
+                foreign key (device_id) references device(id)
+                on delete cascade
+        ) engine=InnoDB default charset=utf8mb4
+    </update>
+
+    <insert id="insertRecord" useGeneratedKeys="true" keyProperty="id">
+        insert into device_inventory_record (
+            device_id,
+            device_code,
+            device_name,
+            inspector_name,
+            inspected_at,
+            result_status,
+            is_normal,
+            is_missing,
+            is_damaged,
+            remark
+        ) values (
+            #{deviceId},
+            #{deviceCode},
+            #{deviceName},
+            #{inspectorName},
+            #{inspectedAt},
+            #{resultStatus},
+            #{normal},
+            #{missing},
+            #{damaged},
+            #{remark}
+        )
+    </insert>
+
+    <sql id="InventoryRecordColumns">
+        id,
+        device_id as deviceId,
+        device_code as deviceCode,
+        device_name as deviceName,
+        inspector_name as inspectorName,
+        date_format(inspected_at, '%Y-%m-%d %H:%i:%s') as inspectedAt,
+        result_status as resultStatus,
+        is_normal as normal,
+        is_missing as missing,
+        is_damaged as damaged,
+        remark,
+        created_at as createdAt
+    </sql>
+
+    <select id="listRecords" resultType="org.example.backend.entity.DeviceInventoryRecordEntity">
+        select
+            <include refid="InventoryRecordColumns" />
+        from device_inventory_record
+        <where>
+            <if test="deviceId != null">
+                device_id = #{deviceId}
+            </if>
+        </where>
+        order by inspected_at desc, id desc
+    </select>
+
+    <select id="listRecordsByDeviceId" resultType="org.example.backend.entity.DeviceInventoryRecordEntity">
+        select
+            <include refid="InventoryRecordColumns" />
+        from device_inventory_record
+        where device_id = #{deviceId}
+        order by inspected_at desc, id desc
+    </select>
+</mapper>
