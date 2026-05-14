@@ -49,6 +49,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * 例如 /v3/api-docs/swagger-config
      */
     private static final String[] PUBLIC_PREFIXES = {
+            "/public/",
             "/v3/api-docs/",
             "/swagger-ui/",
             "/webjars/"

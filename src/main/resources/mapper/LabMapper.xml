@@ -66,6 +66,14 @@
         where id = #{id}
     </update>
 
+    <update id="updateLabOpenStatus">
+        update lab
+        set
+            open_status = #{openStatus},
+            updated_at = now()
+        where id = #{id}
+    </update>
+
     <delete id="deleteRepairsByLabId">
         delete from repair_order
         where lab_id = #{id}

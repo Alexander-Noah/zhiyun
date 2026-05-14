@@ -45,6 +45,7 @@ Thumbs.db
 # Application specific
 data/*.properties
 !data/.gitkeep
+Python/课表导出结果/
 
 # Spring Boot
 spring-boot-devtools.properties

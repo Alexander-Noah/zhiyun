@@ -30,6 +30,27 @@ public class ReservationsController {
         return Result.success("create reservation success", reservationsEntity);
     }
 
+    @GetMapping("/public/labs/{id:\\d+}/reservation-profile")
+    public Result getScanReservationProfile(
+            @PathVariable("id") Integer id,
+            @RequestParam(value = "code", required = false) String code
+    ) {
+        return Result.success("get scan reservation profile success", reservationsService.getScanReservationProfile(id, code));
+    }
+
+    @PostMapping("/public/reservations/scan")
+    public Result submitScanReservation(@RequestBody ReservationsEntity reservationsEntity) {
+        return Result.success("submit scan reservation success", reservationsService.submitScanReservation(reservationsEntity));
+    }
+
+    @GetMapping("/public/reservations/{id:\\d+}/status")
+    public Result getScanReservationStatus(
+            @PathVariable("id") Integer id,
+            @RequestParam(value = "contact", required = false) String contact
+    ) {
+        return Result.success("get scan reservation status success", reservationsService.getScanReservationStatus(id, contact));
+    }
+
     @GetMapping("/reservations/{id:\\d+}")
     public Result getReservation(@PathVariable("id") Integer id) {
         return Result.success("get reservation success", reservationsService.getReservation(id));

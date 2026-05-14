@@ -154,9 +154,123 @@
                 r.lab_id
             )
           and r.reservation_date = #{reservation.reservationDate}
-          and r.time_range = #{reservation.timeRange}
+          and (
+                time_to_sec(str_to_date(substring_index(#{reservation.timeRange}, '-', 1), '%H:%i')) / 60
+              ) &lt; (
+                time_to_sec(str_to_date(substring_index(r.time_range, '-', -1), '%H:%i')) / 60
+              )
+          and (
+                time_to_sec(str_to_date(substring_index(r.time_range, '-', 1), '%H:%i')) / 60
+              ) &lt; (
+                time_to_sec(str_to_date(substring_index(#{reservation.timeRange}, '-', -1), '%H:%i')) / 60
+              )
           and r.status not in ('已驳回', '已取消')
           and (#{id} is null or r.id &lt;&gt; #{id})
+    </select>
+    <select id="countTimetableConflicts" resultType="int">
+        select count(1)
+        from class_timetable t
+        join lab l on l.id = coalesce(
+            #{reservation.labId},
+            (
+                select id
+                from lab
+                where lab_name = #{reservation.labName}
+                   or concat(lab_code, ' ', lab_name) = #{reservation.labName}
+                   or lab_code = #{reservation.labCode}
+                   or lab_code = substring_index(#{reservation.labName}, ' ', 1)
+                limit 1
+            )
+        )
+        where t.weekday = #{weekday}
+          and find_in_set(cast(#{week} as char), t.week_expanded) &gt; 0
+          and (
+	              (
+	                  nullif(l.lab_code, '') is not null
+	                  and regexp_like(
+	                      convert(t.classroom using utf8mb4) collate utf8mb4_general_ci,
+	                      concat(
+	                          '(^|[^0-9A-Za-z])',
+	                          replace(convert(l.lab_code using utf8mb4) collate utf8mb4_general_ci, '-', '[-]'),
+	                          '[A-Za-z]?([^0-9A-Za-z]|$)'
+	                      )
+	                  )
+	              )
+	              or (
+	                  nullif(l.lab_code, '') is null
+	                  and
+	                  nullif(l.room_no, '') is not null
+	                  and regexp_like(
+	                      convert(t.classroom using utf8mb4) collate utf8mb4_general_ci,
+	                      concat(
+	                          '(^|[^0-9A-Za-z])',
+	                          replace(convert(l.room_no using utf8mb4) collate utf8mb4_general_ci, '-', '[-]'),
+	                          '[A-Za-z]?([^0-9A-Za-z]|$)'
+	                      )
+	                  )
+	              )
+              or (
+                  nullif(l.lab_name, '') is not null
+                  and locate(
+                      convert(l.lab_name using utf8mb4) collate utf8mb4_general_ci,
+                      convert(t.classroom using utf8mb4) collate utf8mb4_general_ci
+                  ) &gt; 0
+              )
+          )
+          and (
+                time_to_sec(str_to_date(substring_index(#{reservation.timeRange}, '-', 1), '%H:%i')) / 60
+              ) &lt; (
+                case ceil(coalesce(t.end_section, t.start_section, 0) / 2)
+                    when 1 then 600
+                    when 2 then 710
+                    when 3 then 930
+                    when 4 then 1040
+                    when 5 then 1210
+                    when 6 then 1310
+                    else 0
+                end
+              )
+          and (
+                case ceil(coalesce(t.start_section, t.end_section, 0) / 2)
+                    when 1 then 510
+                    when 2 then 620
+                    when 3 then 840
+                    when 4 then 950
+                    when 5 then 1120
+                    when 6 then 1220
+                    else 0
+                end
+              ) &lt; (
+                time_to_sec(str_to_date(substring_index(#{reservation.timeRange}, '-', -1), '%H:%i')) / 60
+              )
+    </select>
+    <select id="countCurrentApprovedReservationsByLabId" resultType="int">
+        select count(1)
+        from lab_reservation
+        where lab_id = #{labId}
+          and status = '已通过'
+          and reservation_date = curdate()
+          and (
+                time_to_sec(str_to_date(substring_index(time_range, '-', 1), '%H:%i')) / 60
+              ) &lt;= (time_to_sec(curtime()) / 60)
+          and (time_to_sec(curtime()) / 60) &lt; (
+                time_to_sec(str_to_date(substring_index(time_range, '-', -1), '%H:%i')) / 60
+              )
+    </select>
+    <select id="countUpcomingApprovedReservationsByLabId" resultType="int">
+        select count(1)
+        from lab_reservation
+        where lab_id = #{labId}
+          and status = '已通过'
+          and (
+                reservation_date &gt; curdate()
+                or (
+                    reservation_date = curdate()
+                    and (
+                        time_to_sec(str_to_date(substring_index(time_range, '-', -1), '%H:%i')) / 60
+                    ) &gt;= (time_to_sec(curtime()) / 60)
+                )
+          )
     </select>
     <update id="getRejected">
         update lab_reservation

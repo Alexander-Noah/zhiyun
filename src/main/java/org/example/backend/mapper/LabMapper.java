@@ -55,6 +55,8 @@ public interface LabMapper {
 
     void updateLab(@Param("id") Integer id, @Param("lab") LabEntity lab);
 
+    int updateLabOpenStatus(@Param("id") Integer id, @Param("openStatus") String openStatus);
+
     int deleteRepairsByLabId(Integer id);
 
     int deleteReservationsByLabId(Integer id);
