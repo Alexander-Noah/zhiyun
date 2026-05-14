@@ -1,7 +1,7 @@
 # 智云实验室后端项目说明
 
 这份文档写给后续维护和二次开发使用。重点说明后端代码怎么分层、接口在哪里、Mapper 怎么写、数据库字段怎么对应、前后端联调时怎么排错。
-
+前端仓库：https://gitee.com/translator-of-zheng-haotao/zhiyun-laboratory
 ## 1. 技术栈
 
 后端目录：`Backend`
