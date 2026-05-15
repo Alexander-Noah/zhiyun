@@ -80,6 +80,9 @@ public class UserServiceImpl implements UserService {
         if (user.getPermissions() == null) {
             user.setPermissions(existingUser.getPermissions());
         }
+        if (user.getAvatarUrl() == null) {
+            user.setAvatarUrl(existingUser.getAvatarUrl());
+        }
         normalizeUser(user);
         if (hasNewPassword && !passwordService.isEncoded(user.getPassword())) {
             user.setPassword(passwordService.encode(user.getPassword()));

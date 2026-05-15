@@ -47,6 +47,14 @@ smart-lab:
     enabled: true
     timeout: 5s
     devices: []
+  oss:
+    enabled: ${SMART_LAB_OSS_ENABLED:false}
+    endpoint: ${ALIYUN_OSS_ENDPOINT:}
+    bucket: ${ALIYUN_OSS_BUCKET:}
+    access-key-id: ${ALIYUN_OSS_ACCESS_KEY_ID:}
+    access-key-secret: ${ALIYUN_OSS_ACCESS_KEY_SECRET:}
+    public-base-url: ${ALIYUN_OSS_PUBLIC_BASE_URL:}
+    avatar-dir: ${ALIYUN_OSS_AVATAR_DIR:avatars}
 
 springdoc:
   packages-to-scan: org.example.backend.controller

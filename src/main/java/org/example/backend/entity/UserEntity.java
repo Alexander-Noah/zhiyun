@@ -15,6 +15,7 @@ public class UserEntity {
     private String phone;
     private String email;
     private String department;
+    private String avatarUrl;
     private Integer status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

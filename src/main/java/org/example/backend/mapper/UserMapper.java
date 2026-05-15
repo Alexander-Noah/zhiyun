@@ -16,6 +16,7 @@ public interface UserMapper {
                 u.phone,
                 u.email,
                 u.department,
+                u.avatar_url as avatarUrl,
                 u.status,
                 u.created_at as createdAt,
                 u.updated_at as updatedAt,
@@ -38,6 +39,7 @@ public interface UserMapper {
                 u.phone,
                 u.email,
                 u.department,
+                u.avatar_url as avatarUrl,
                 u.status,
                 u.created_at as createdAt,
                 u.updated_at as updatedAt,
@@ -60,6 +62,7 @@ public interface UserMapper {
                 u.phone,
                 u.email,
                 u.department,
+                u.avatar_url as avatarUrl,
                 u.status,
                 u.created_at as createdAt,
                 u.updated_at as updatedAt,
@@ -82,6 +85,7 @@ public interface UserMapper {
                 u.phone,
                 u.email,
                 u.department,
+                u.avatar_url as avatarUrl,
                 u.status,
                 u.created_at as createdAt,
                 u.updated_at as updatedAt,
@@ -96,8 +100,8 @@ public interface UserMapper {
     UserEntity getUser(@Param("id") Integer id);
 
     @Insert("""
-            insert into sys_user(username, password, real_name, phone, email, department, status, permissions)
-            values(#{username}, #{password}, #{realName}, #{phone}, #{email}, #{department}, coalesce(#{status}, 1), #{permissions})
+            insert into sys_user(username, password, real_name, phone, email, department, avatar_url, status, permissions)
+            values(#{username}, #{password}, #{realName}, #{phone}, #{email}, #{department}, #{avatarUrl}, coalesce(#{status}, 1), #{permissions})
             """)
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insertUser(UserEntity user);
@@ -111,6 +115,7 @@ public interface UserMapper {
                 phone = #{user.phone},
                 email = #{user.email},
                 department = #{user.department},
+                avatar_url = #{user.avatarUrl},
                 status = coalesce(#{user.status}, status),
                 permissions = #{user.permissions},
                 updated_at = now()
