@@ -973,3 +973,464 @@ git status --short
 - 日志文件。
 - IDE 临时文件。
 - 和当前功能无关的大量改动。
+
+## 24. 安全配置说明
+
+后端已经启用 JWT 登录态、密码 PBKDF2 哈希、登录失败限流、CORS 来源校验和统一安全响应头。生产环境部署时必须优先检查以下环境变量：
+
+```powershell
+# 数据库连接，不建议在 application.yaml 中写生产账号密码
+$env:SMART_LAB_DB_URL="jdbc:mysql://127.0.0.1:3306/smart_lab_basic"
+$env:SMART_LAB_DB_USERNAME="smart_lab"
+$env:SMART_LAB_DB_PASSWORD="请使用强密码"
+
+# JWT 签名密钥，生产环境必须替换为 32 位以上随机字符串
+$env:SMART_LAB_JWT_SECRET="replace-with-random-secret"
+$env:SMART_LAB_JWT_ISSUER="smart-lab"
+
+# 前端允许访问后端的来源，多个来源用英文逗号分隔
+$env:SMART_LAB_CORS_ALLOWED_ORIGINS="https://smart-lab.example.edu.cn"
+$env:SMART_LAB_CORS_ALLOWED_ORIGIN_PATTERNS="https://smart-lab.example.edu.cn"
+
+# 通义千问 / DashScope Key，不要写入代码仓库
+$env:DASHSCOPE_API_KEY="sk-..."
+```
+
+安全相关配置项位于 `src/main/resources/application.yaml` 的 `smart-lab.security` 下：
+
+- `jwt.enabled`：是否启用 JWT 校验。
+- `jwt.secret`：JWT 签名密钥。
+- `jwt.issuer`：JWT 签发方。
+- `jwt.expiration-seconds`：登录态有效期。
+- `password.iterations`：PBKDF2 迭代次数。
+- `cors.allowed-origins` / `cors.allowed-origin-patterns`：允许访问 API 和 WebSocket 的前端来源。
+- `login-rate-limit.max-attempts` / `lock-seconds`：登录失败限流。
+- `headers.enabled`：是否写入安全响应头。
+
+日志会自动脱敏 query 中的 `token`、`password`、`secret`、`key`、`authorization` 等字段。新增接口时不要在 URL query 中传递敏感业务数据，优先使用请求体或 Authorization Header。
+
+## 25. 加签处理接口
+
+通用加签表为 `approval_countersign`，启动后由 `DatabaseSchemaInitializer` 自动创建。当前已接入预约审核，后续报修、耗材、使用记录等模块可复用同一张表。
+
+### 发起加签
+
+```http
+POST /approval-countersigns
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "businessType": "reservation",
+  "businessId": "13",
+  "businessTitle": "软件工程 2 班 · A101 云计算实验室",
+  "businessStatus": "待审核",
+  "assignerName": "张明",
+  "assigneeName": "教务管理员",
+  "reason": "需确认课程安排和资源冲突"
+}
+```
+
+预约发起加签后，预约状态会写为 `加签中`，避免被直接通过或驳回。
+
+### 查询加签
+
+```http
+GET /approval-countersigns?businessType=reservation&businessId=13
+```
+
+常用筛选参数：
+
+- `businessType`：业务类型。
+- `businessId`：业务记录 ID。
+- `assigneeName`：处理人姓名。
+- `status`：`待加签`、`已同意`、`已退回`、`已取消`。
+
+### 完成加签
+
+```http
+POST /approval-countersigns/{id}/complete
+Content-Type: application/json
+
+{
+  "result": "已同意",
+  "resultRemark": "已确认资源可用，返回原审批流程"
+}
+```
+
+`result=已同意` 时预约回到 `待审核`，`result=已退回` 时预约写为 `已驳回`。
+
+### 撤销加签
+
+```http
+POST /approval-countersigns/{id}/cancel
+Content-Type: application/json
+
+{
+  "resultRemark": "管理员撤销加签，返回待审核"
+}
+```
+
+## 26. 后端二次开发与修改指南
+
+本节用于后续维护时快速定位“后端要改哪里、怎么改”。后端通常按下面链路工作：
+
+```text
+Controller -> Service -> ServiceImpl -> Mapper -> Mapper XML -> MySQL
+```
+
+修改接口时不要只改 Controller，也要检查实体、Service、Mapper XML 和前端字段是否同步。
+
+### 26.1 常用目录说明
+
+```text
+src/main/java/org/example/backend/controller/
+  HTTP 接口入口，负责接收请求参数和返回 Result。
+
+src/main/java/org/example/backend/service/
+  Service 接口，定义业务能力。
+
+src/main/java/org/example/backend/service/impl/
+  Service 实现，编写主要业务逻辑、校验、事务、默认值处理。
+
+src/main/java/org/example/backend/mapper/
+  MyBatis Mapper Java 接口。
+
+src/main/resources/mapper/
+  MyBatis XML SQL。
+
+src/main/java/org/example/backend/entity/
+  实体类，和数据库字段、前端 JSON 字段对应。
+
+src/main/java/org/example/backend/security/
+  JWT、密码、登录限制、认证过滤器。
+
+src/main/java/org/example/backend/config/
+  CORS、安全响应头、数据库初始化、日志过滤器等配置。
+```
+
+### 26.2 新增一个普通业务接口
+
+以新增“实验室巡检记录”为例：
+
+1. 新建实体：
+
+```text
+src/main/java/org/example/backend/entity/LabInspectionEntity.java
+```
+
+2. 新建 Mapper 接口：
+
+```text
+src/main/java/org/example/backend/mapper/LabInspectionMapper.java
+```
+
+3. 新建 Mapper XML：
+
+```text
+src/main/resources/mapper/LabInspectionMapper.xml
+```
+
+4. 新建 Service：
+
+```text
+src/main/java/org/example/backend/service/LabInspectionService.java
+src/main/java/org/example/backend/service/impl/LabInspectionServiceImpl.java
+```
+
+5. 新建 Controller：
+
+```text
+src/main/java/org/example/backend/controller/LabInspectionController.java
+```
+
+6. 如果需要自动建表，可在 `DatabaseSchemaInitializer` 或对应 Mapper XML 中补建表 SQL。
+
+7. 前端同步修改：
+
+```text
+web/src/api/endpoints.js
+web/src/api/services/
+web/src/views/
+```
+
+8. 编译检查：
+
+```powershell
+mvn.cmd -DskipTests compile
+```
+
+### 26.3 修改数据库字段
+
+以给 `device` 表新增 `manufacturer` 厂商字段为例：
+
+1. 数据库加字段：
+
+```sql
+alter table device add column manufacturer varchar(120);
+```
+
+2. 实体类增加字段：
+
+```text
+src/main/java/org/example/backend/entity/DevicesEntity.java
+```
+
+```java
+private String manufacturer;
+```
+
+3. Mapper XML 查询列增加别名：
+
+```text
+src/main/resources/mapper/DevicesMapper.xml
+```
+
+```sql
+d.manufacturer as manufacturer
+```
+
+4. insert/update SQL 同步增加字段。
+
+5. 前端表单、列表、详情同步增加字段。
+
+6. 编译后实际打开页面新增、编辑、查询一次。
+
+### 26.4 修改实验室管理
+
+主要文件：
+
+```text
+controller/LabController.java
+entity/LabEntity.java
+mapper/LabMapper.java
+resources/mapper/LabMapper.xml
+service/LabService.java
+service/impl/LabServiceImpl.java
+```
+
+实验室数据是统计分析、预约、设备和课表匹配的基础。修改实验室编号、名称、房间号字段时，要同步检查前端统计页和预约冲突逻辑。
+
+### 26.5 修改设备管理
+
+主要文件：
+
+```text
+controller/DevicesController.java
+entity/DevicesEntity.java
+mapper/DevicesMapper.java
+resources/mapper/DevicesMapper.xml
+service/DevicesService.java
+service/impl/DevicesServiceImpl.java
+```
+
+设备相关扩展要注意：
+
+- `labId` 是否能关联到实验室。
+- `status`、`health`、`online` 是否影响前端设备在线率。
+- 盘点和调拨涉及多表写入时要使用 `@Transactional`。
+- 删除设备前确认是否有维修、盘点、调拨等关联记录。
+
+### 26.6 修改预约管理
+
+主要文件：
+
+```text
+controller/ReservationsController.java
+entity/ReservationsEntity.java
+mapper/ReservationsMapper.java
+resources/mapper/ReservationsMapper.xml
+service/ReservationsService.java
+service/impl/ReservationsServiceImpl.java
+```
+
+重点 SQL：
+
+```text
+countConflictingReservations   检查预约之间是否冲突
+countTimetableConflicts        检查预约是否和课表冲突
+```
+
+修改预约冲突规则后，至少测试：
+
+- 同实验室同日期同时间段。
+- 同实验室相邻时间段。
+- 不同实验室同时间段。
+- 课表已占用时间段。
+- 状态为驳回、取消、加签中的预约是否参与冲突。
+
+### 26.7 修改课表数据
+
+主要文件：
+
+```text
+controller/ClassTimetableController.java
+entity/ClassTimetableEntity.java
+mapper/ClassTimetableMapper.java
+resources/mapper/ClassTimetableMapper.xml
+service/ClassTimetableService.java
+service/impl/ClassTimetableServiceImpl.java
+Python/
+```
+
+关键字段：
+
+```text
+semester       学期
+weekday        星期
+sectionText    节次文本
+startSection   开始节次
+endSection     结束节次
+courseName     课程名
+teacher        教师
+weekExpanded   展开后的周次
+classroom      上课地点
+```
+
+注意：`classroom` 可能不是实验室。前端统计分析会用实验室基础表匹配，只统计能匹配到实验室的数据。
+
+### 26.8 修改统计分析相关接口
+
+统计分析页目前主要在前端聚合数据，但后端要保证这些接口返回字段稳定：
+
+```text
+GET /labs
+GET /devices
+GET /reservations
+GET /usage-records
+GET /class-timetables
+GET /class-timetables/crawler-config
+GET /repairs
+GET /course-environment-requests
+GET /environment-templates
+```
+
+如果修改返回字段，必须同步检查前端：
+
+```text
+web/src/views/statistics/DataStatistics.vue
+```
+
+尤其注意：
+
+- 实验室字段：`id`、`labCode`、`labName`、`roomNo`
+- 设备字段：`labId`、`labName`、`status`、`online`
+- 预约字段：`labId`、`labName`、`labCode`、`reservationDate`、`status`
+- 使用记录字段：`resource`、`useTime`、`status`
+- 课表字段：`classroom`、`weekday`、`weekExpanded`
+- 工单字段：`lab`、`faultType`、`status`
+
+### 26.9 修改登录、JWT 和权限
+
+主要文件：
+
+```text
+controller/UserController.java
+entity/UserEntity.java
+mapper/UserMapper.java
+service/impl/UserServiceImpl.java
+security/JwtService.java
+security/JwtAuthenticationFilter.java
+security/PasswordService.java
+security/LoginAttemptLimiter.java
+```
+
+常见修改：
+
+- token 过期时间：`application.yaml` 中的 `smart-lab.security.jwt.expiration-seconds`
+- JWT 密钥：`SMART_LAB_JWT_SECRET`
+- 密码强度：`PasswordService` 或用户保存逻辑
+- 登录失败限制：`LoginAttemptLimiter`
+- 允许跨域来源：`smart-lab.security.cors`
+
+### 26.10 Mapper XML 常见问题
+
+Mapper 接口多参数时建议写：
+
+```java
+int updateDevice(@Param("id") Long id, @Param("device") DevicesEntity device);
+```
+
+XML 中对应：
+
+```xml
+<update id="updateDevice">
+  update device
+  set device_name = #{device.deviceName}
+  where id = #{id}
+</update>
+```
+
+常见错误：
+
+- XML 的 `namespace` 和 Mapper 接口完整类名不一致。
+- XML 的 `id` 和 Mapper 方法名不一致。
+- Java 参数名和 XML 中 `#{}` 引用不一致。
+- SQL 查询字段没有起别名，导致前端拿不到预期字段。
+- 数据库字段是下划线，实体字段是驼峰，但复杂 SQL 没有正确映射。
+
+### 26.11 事务使用建议
+
+需要事务的场景：
+
+- 同时写主表和记录表。
+- 一个业务动作涉及多张表。
+- 中途失败时必须全部回滚。
+
+写法：
+
+```java
+@Override
+@Transactional
+public Object saveSomething(...) {
+    // 多个数据库写操作
+}
+```
+
+建议把 `@Transactional` 放在 ServiceImpl 的 public 入口方法上。
+
+### 26.12 后端排错顺序
+
+接口报错时按顺序检查：
+
+1. 控制台请求日志中的 method、uri、status、duration。
+2. requestId。
+3. 异常类型。
+4. Caused by。
+5. Mapper XML 中对应 SQL。
+6. 数据库字段是否存在。
+7. 前端传入 JSON 字段类型是否和实体一致。
+
+常见错误：
+
+- `HttpMessageNotReadableException`：JSON 格式或字段类型不匹配。
+- `InvalidFormatException`：例如后端 Long 收到了字符串 id。
+- SQL 字段不存在：数据库结构和 Mapper XML 不一致。
+- 参数找不到：`@Param` 名称和 XML 引用不一致。
+- 401：token 缺失、过期或 JWT secret 不一致。
+- CORS：前端地址不在允许来源中。
+
+### 26.13 编译与提交前检查
+
+后端提交前至少执行：
+
+```powershell
+mvn.cmd -DskipTests compile
+```
+
+如果改了接口，建议同时启动前端实际点一遍页面。
+
+查看状态：
+
+```powershell
+git status --short
+```
+
+不要提交：
+
+- `target/`
+- `logs/`
+- 本地真实密钥
+- 本地数据库账号密码
+- IDE 临时文件
+- 与本次需求无关的大量格式化改动
