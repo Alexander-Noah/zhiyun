@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.example.backend.mapper.AiConversationMapper">
+    <sql id="ConversationColumns">
+        id,
+        user_id as userId,
+        conversation_id as conversationId,
+        title,
+        preview,
+        updated_at_millis as updatedAtMillis,
+        messages_json as messagesJson,
+        created_at as createdAt,
+        updated_at as updatedAt
+    </sql>
+
+    <select id="listByUser" resultType="org.example.backend.entity.AiConversationEntity">
+        select
+            <include refid="ConversationColumns" />
+        from ai_assistant_conversation
+        where user_id = #{userId}
+        order by updated_at_millis desc, id desc
+        limit 30
+    </select>
+
+    <insert id="upsertConversation">
+        insert into ai_assistant_conversation (
+            user_id,
+            conversation_id,
+            title,
+            preview,
+            updated_at_millis,
+            messages_json
+        )
+        values (
+            #{userId},
+            #{conversationId},
+            #{title},
+            #{preview},
+            #{updatedAtMillis},
+            #{messagesJson}
+        )
+        on duplicate key update
+            title = values(title),
+            preview = values(preview),
+            updated_at_millis = values(updated_at_millis),
+            messages_json = values(messages_json),
+            updated_at = now()
+    </insert>
+
+    <delete id="trimUserConversations">
+        delete from ai_assistant_conversation
+        where user_id = #{userId}
+          and conversation_id not in (
+            select conversation_id from (
+                select conversation_id
+                from ai_assistant_conversation
+                where user_id = #{userId}
+                order by updated_at_millis desc, id desc
+                limit #{maxCount}
+            ) kept_conversations
+          )
+    </delete>
+</mapper>
