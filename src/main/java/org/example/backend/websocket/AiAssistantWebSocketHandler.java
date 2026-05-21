@@ -77,7 +77,7 @@ public class AiAssistantWebSocketHandler extends AbstractWebSocketHandler {
 
         if ("listen".equals(type) && "detect".equals(state)) {
             String question = asString(payload.get("text"));
-            sendAnswer(session, question, asString(session.getAttributes().get("sessionId")));
+            sendAnswer(session, question, asString(session.getAttributes().get("sessionId")), asImageList(payload.get("images")));
         }
     }
 
@@ -149,8 +149,13 @@ public class AiAssistantWebSocketHandler extends AbstractWebSocketHandler {
         session.getAttributes().remove("transcriptSegments");
     }
 
-    private void sendAnswer(WebSocketSession session, String question, String agentSessionId) throws Exception {
-        String answer = aiAssistantService.generateAnswer(question, agentSessionId);
+    private void sendAnswer(
+            WebSocketSession session,
+            String question,
+            String agentSessionId,
+            List<Map<String, Object>> images
+    ) throws Exception {
+        String answer = aiAssistantService.generateAnswer(question, agentSessionId, images);
         sendJson(session, Map.of("type", "tts", "state", "start"));
         sendJson(session, Map.of("type", "tts", "state", "sentence_start", "text", answer));
         sendJson(session, Map.of("type", "tts", "state", "stop"));
@@ -176,6 +181,21 @@ public class AiAssistantWebSocketHandler extends AbstractWebSocketHandler {
 
     private String asString(Object value) {
         return value == null ? "" : String.valueOf(value);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> asImageList(Object value) {
+        if (!(value instanceof List<?> items)) {
+            return List.of();
+        }
+
+        List<Map<String, Object>> images = new ArrayList<>();
+        for (Object item : items) {
+            if (item instanceof Map<?, ?> map) {
+                images.add((Map<String, Object>) map);
+            }
+        }
+        return images;
     }
 
     @SuppressWarnings("unchecked")

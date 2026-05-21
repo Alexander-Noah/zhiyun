@@ -13,6 +13,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -25,6 +26,7 @@ public class TongyiAgentServiceImpl implements TongyiAgentService {
     private static final Path CONFIG_PATH = Path.of("data", "tongyi-api-config.json");
     private static final String DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1";
     private static final String DEFAULT_MODEL = "qwen-plus";
+    private static final String DEFAULT_VISION_MODEL = "qwen-vl-plus";
 
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
@@ -44,6 +46,7 @@ public class TongyiAgentServiceImpl implements TongyiAgentService {
         data.put("configured", isConfigured());
         data.put("base_url", getBaseUrl());
         data.put("model", getModel());
+        data.put("vision_model", getVisionModel());
         data.put("api_key_configured", !getApiKey().isBlank());
         return data;
     }
@@ -53,6 +56,7 @@ public class TongyiAgentServiceImpl implements TongyiAgentService {
         putIfPresent(payload, "api_key");
         putIfPresent(payload, "base_url");
         putIfPresent(payload, "model");
+        putIfPresent(payload, "vision_model");
         putIfPresent(payload, "enabled");
         saveFileConfig();
         return getConfig();
@@ -65,15 +69,21 @@ public class TongyiAgentServiceImpl implements TongyiAgentService {
 
     @Override
     public String callAgent(String question, String sessionId) {
+        return callAgent(question, sessionId, List.of());
+    }
+
+    @Override
+    public String callAgent(String question, String sessionId, List<Map<String, Object>> images) {
         if (!isConfigured()) {
             throw new IllegalStateException("Tongyi API key is not configured");
         }
 
+        List<Map<String, Object>> validImages = normalizeImages(images);
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("model", getModel());
+        body.put("model", validImages.isEmpty() ? getModel() : getVisionModel());
         body.put("messages", List.of(
                 Map.of("role", "system", "content", "你是实验室协同管控平台的企业级AI助手，回答应专业、简洁、可执行。"),
-                Map.of("role", "user", "content", question == null ? "" : question)
+                Map.of("role", "user", "content", buildUserContent(question, validImages))
         ));
         body.put("temperature", 0.7);
 
@@ -96,6 +106,40 @@ public class TongyiAgentServiceImpl implements TongyiAgentService {
             log.warn("Failed to parse Tongyi API response", exception);
             throw new IllegalStateException("Failed to parse Tongyi API response", exception);
         }
+    }
+
+    private Object buildUserContent(String question, List<Map<String, Object>> images) {
+        String text = question == null || question.isBlank() ? "请分析这张图片。" : question;
+
+        if (images.isEmpty()) {
+            return text;
+        }
+
+        List<Map<String, Object>> content = new ArrayList<>();
+        content.add(Map.of("type", "text", "text", text));
+
+        for (Map<String, Object> image : images) {
+            String dataUrl = asString(image.get("dataUrl"), "");
+            if (!dataUrl.isBlank()) {
+                content.add(Map.of(
+                        "type", "image_url",
+                        "image_url", Map.of("url", dataUrl)
+                ));
+            }
+        }
+
+        return content;
+    }
+
+    private List<Map<String, Object>> normalizeImages(List<Map<String, Object>> images) {
+        if (images == null || images.isEmpty()) {
+            return List.of();
+        }
+
+        return images.stream()
+                .filter(image -> image != null && asString(image.get("dataUrl"), "").startsWith("data:image/"))
+                .limit(3)
+                .toList();
     }
 
     @SuppressWarnings("unchecked")
@@ -126,6 +170,7 @@ public class TongyiAgentServiceImpl implements TongyiAgentService {
         defaults.put("enabled", true);
         defaults.put("base_url", DEFAULT_BASE_URL);
         defaults.put("model", DEFAULT_MODEL);
+        defaults.put("vision_model", DEFAULT_VISION_MODEL);
         defaults.put("api_key", "");
         return defaults;
     }
@@ -161,6 +206,14 @@ public class TongyiAgentServiceImpl implements TongyiAgentService {
 
     private String getModel() {
         return getProperty("tongyi.agent.model", "TONGYI_MODEL", asString(fileConfig.get("model"), DEFAULT_MODEL));
+    }
+
+    private String getVisionModel() {
+        return getProperty(
+                "tongyi.agent.vision-model",
+                "TONGYI_VISION_MODEL",
+                asString(fileConfig.get("vision_model"), DEFAULT_VISION_MODEL)
+        );
     }
 
     private String getApiKey() {

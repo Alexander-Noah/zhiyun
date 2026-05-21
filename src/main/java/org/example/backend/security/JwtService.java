@@ -20,13 +20,16 @@ public class JwtService {
 
     private final byte[] secret;
     private final long expirationSeconds;
+    private final String issuer;
 
     public JwtService(
             @Value("${smart-lab.security.jwt.secret:smart-lab-dev-jwt-secret-change-in-production-2026}") String secret,
-            @Value("${smart-lab.security.jwt.expiration-seconds:7200}") long expirationSeconds
+            @Value("${smart-lab.security.jwt.expiration-seconds:7200}") long expirationSeconds,
+            @Value("${smart-lab.security.jwt.issuer:smart-lab}") String issuer
     ) {
         this.secret = secret.getBytes(StandardCharsets.UTF_8);
         this.expirationSeconds = Math.max(expirationSeconds, 300);
+        this.issuer = issuer == null ? "" : issuer.trim();
     }
 
     public String generateToken(UserEntity user) {
@@ -42,6 +45,7 @@ public class JwtService {
         payload.put("uid", user.getId());
         payload.put("role", user.getRoleCode());
         payload.put("name", user.getRealName());
+        payload.put("iss", issuer);
         payload.put("iat", issuedAt);
         payload.put("exp", expiresAt);
 
@@ -67,7 +71,17 @@ public class JwtService {
             throw new IllegalArgumentException("invalid token signature");
         }
 
+        String headerJson = decodeJson(parts[0]);
+        if (!"HS256".equals(stringValue(jsonValue(headerJson, "alg"))) || !TOKEN_TYPE.equals(stringValue(jsonValue(headerJson, "typ")))) {
+            throw new IllegalArgumentException("invalid token header");
+        }
+
         String payloadJson = decodeJson(parts[1]);
+        String tokenIssuer = stringValue(jsonValue(payloadJson, "iss"));
+        if (!issuer.isBlank() && !issuer.equals(tokenIssuer)) {
+            throw new IllegalArgumentException("invalid token issuer");
+        }
+
         long expiresAt = numberValue(jsonValue(payloadJson, "exp"));
         if (expiresAt <= Instant.now().getEpochSecond()) {
             throw new IllegalArgumentException("token expired");

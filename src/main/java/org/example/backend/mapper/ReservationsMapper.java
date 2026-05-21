@@ -37,4 +37,11 @@ public interface ReservationsMapper {
     int getApproved(@Param("id") Integer id, @Param("reservation") ReservationsEntity reservationsEntity);
 
     int getRejected(@Param("id") Integer id, @Param("reservation") ReservationsEntity reservationsEntity);
+
+    int updateReviewStatus(
+            @Param("id") Integer id,
+            @Param("status") String status,
+            @Param("reviewerName") String reviewerName,
+            @Param("reviewRemark") String reviewRemark
+    );
 }

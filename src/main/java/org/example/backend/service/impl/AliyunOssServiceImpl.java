@@ -2,13 +2,16 @@ package org.example.backend.service.impl;
 
 import com.aliyun.oss.OSS;
 import com.aliyun.oss.OSSClientBuilder;
+import com.aliyun.oss.OSSException;
 import com.aliyun.oss.model.ObjectMetadata;
+import com.aliyun.oss.model.OSSObject;
 import org.example.backend.config.AliyunOssProperties;
 import org.example.backend.service.AliyunOssService;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.time.LocalDate;
 import java.util.Map;
 import java.util.Set;
@@ -49,10 +52,37 @@ public class AliyunOssServiceImpl implements AliyunOssService {
             ossClient.shutdown();
         }
 
+        String publicUrl = buildPublicUrl(objectKey);
         return Map.of(
-                "url", buildPublicUrl(objectKey),
+                "url", publicUrl,
+                "avatarUrl", publicUrl,
                 "objectKey", objectKey
         );
+    }
+
+    @Override
+    public AvatarObject downloadAvatar(String objectKey) {
+        validateConfig();
+        String normalizedObjectKey = normalizeAvatarObjectKey(objectKey);
+        OSS ossClient = new OSSClientBuilder().build(
+                properties.getEndpoint(),
+                properties.getAccessKeyId(),
+                properties.getAccessKeySecret()
+        );
+
+        try {
+            OSSObject ossObject = ossClient.getObject(properties.getBucket(), normalizedObjectKey);
+            String contentType = ossObject.getObjectMetadata() == null ? "" : ossObject.getObjectMetadata().getContentType();
+            try (InputStream objectContent = ossObject.getObjectContent()) {
+                return new AvatarObject(objectContent.readAllBytes(), isBlank(contentType) ? "application/octet-stream" : contentType);
+            }
+        } catch (OSSException e) {
+            throw new IllegalArgumentException("头像文件不存在或无法访问");
+        } catch (IOException e) {
+            throw new IllegalArgumentException("头像文件读取失败");
+        } finally {
+            ossClient.shutdown();
+        }
     }
 
     private void validateConfig() {
@@ -83,6 +113,21 @@ public class AliyunOssServiceImpl implements AliyunOssService {
         return avatarDir + "/" + datePath + "/" + UUID.randomUUID() + ext;
     }
 
+    private String normalizeAvatarObjectKey(String objectKey) {
+        if (isBlank(objectKey)) {
+            throw new IllegalArgumentException("头像文件地址无效");
+        }
+        String normalizedObjectKey = trimSlashes(objectKey);
+        if (normalizedObjectKey.contains("..")) {
+            throw new IllegalArgumentException("头像文件地址无效");
+        }
+        String avatarDir = trimSlashes(properties.getAvatarDir());
+        if (!normalizedObjectKey.startsWith(avatarDir + "/")) {
+            throw new IllegalArgumentException("头像文件地址无效");
+        }
+        return normalizedObjectKey;
+    }
+
     private String getFileExtension(String filename) {
         if (filename == null) {
             return ".png";
@@ -95,10 +140,6 @@ public class AliyunOssServiceImpl implements AliyunOssService {
     }
 
     private String buildPublicUrl(String objectKey) {
-        if (!isBlank(properties.getPublicBaseUrl())) {
-            return trimRightSlash(properties.getPublicBaseUrl()) + "/" + objectKey;
-        }
-
         String endpoint = properties.getEndpoint().replaceFirst("^https?://", "");
         return "https://" + properties.getBucket() + "." + endpoint + "/" + objectKey;
     }

@@ -51,7 +51,7 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public UserEntity createUser(UserEntity user) {
-        normalizeUser(user);
+        normalizeUser(user, true, true);
         user.setPassword(passwordService.encode(user.getPassword()));
         userMapper.insertUser(user);
         saveRole(user.getId(), user.getRoleCode());
@@ -83,7 +83,7 @@ public class UserServiceImpl implements UserService {
         if (user.getAvatarUrl() == null) {
             user.setAvatarUrl(existingUser.getAvatarUrl());
         }
-        normalizeUser(user);
+        normalizeUser(user, false, hasNewPassword);
         if (hasNewPassword && !passwordService.isEncoded(user.getPassword())) {
             user.setPassword(passwordService.encode(user.getPassword()));
         }
@@ -108,15 +108,21 @@ public class UserServiceImpl implements UserService {
         return savedUser;
     }
 
-    private void normalizeUser(UserEntity user) {
-        if (user.getRealName() == null || user.getRealName().isBlank()) {
-            user.setRealName(user.getUsername());
+    private void normalizeUser(UserEntity user, boolean creating, boolean hasNewPassword) {
+        if (user == null) {
+            throw new IllegalArgumentException("请填写账号信息");
         }
         if (user.getUsername() == null || user.getUsername().isBlank()) {
             user.setUsername("user" + System.currentTimeMillis());
         }
-        if (user.getPassword() == null || user.getPassword().isBlank()) {
-            user.setPassword("123456");
+        if (user.getRealName() == null || user.getRealName().isBlank()) {
+            user.setRealName(user.getUsername());
+        }
+        if (creating && (user.getPassword() == null || user.getPassword().isBlank())) {
+            throw new IllegalArgumentException("请填写初始密码");
+        }
+        if (hasNewPassword) {
+            validatePassword(user.getPassword());
         }
         if (user.getStatus() == null) {
             user.setStatus(1);
@@ -126,6 +132,18 @@ public class UserServiceImpl implements UserService {
         }
         if (user.getRoleCode() == null || user.getRoleCode().isBlank()) {
             user.setRoleCode("teacher");
+        }
+    }
+
+    private void validatePassword(String password) {
+        if (password == null || password.length() < 8) {
+            throw new IllegalArgumentException("密码至少 8 位，并包含字母和数字");
+        }
+        if (!password.matches(".*[A-Za-z].*") || !password.matches(".*\\d.*")) {
+            throw new IllegalArgumentException("密码必须同时包含字母和数字");
+        }
+        if (password.matches("(?i)^(123456|password|admin123|qwerty\\d*)$")) {
+            throw new IllegalArgumentException("密码过于简单，请更换更安全的密码");
         }
     }
 

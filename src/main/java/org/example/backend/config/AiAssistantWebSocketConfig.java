@@ -1,6 +1,7 @@
 package org.example.backend.config;
 
 import org.example.backend.security.JwtService;
+import org.springframework.beans.factory.annotation.Value;
 import org.example.backend.websocket.AiAssistantWebSocketHandler;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.server.ServerHttpRequest;
@@ -11,6 +12,8 @@ import org.springframework.web.socket.server.HandshakeInterceptor;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
 import org.springframework.web.socket.WebSocketHandler;
+import org.springframework.web.socket.server.standard.ServletServerContainerFactoryBean;
+import org.springframework.context.annotation.Bean;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -21,19 +24,35 @@ import java.util.Optional;
 @Configuration
 @EnableWebSocket
 public class AiAssistantWebSocketConfig implements WebSocketConfigurer {
+    private static final int AI_ASSISTANT_MESSAGE_BUFFER_SIZE = 20 * 1024 * 1024;
+
     private final AiAssistantWebSocketHandler aiAssistantWebSocketHandler;
     private final JwtService jwtService;
+    private final String[] allowedOriginPatterns;
 
-    public AiAssistantWebSocketConfig(AiAssistantWebSocketHandler aiAssistantWebSocketHandler, JwtService jwtService) {
+    public AiAssistantWebSocketConfig(
+            AiAssistantWebSocketHandler aiAssistantWebSocketHandler,
+            JwtService jwtService,
+            @Value("${smart-lab.security.cors.allowed-origin-patterns:http://localhost:*,http://127.0.0.1:*,http://10.*.*.*:*,http://172.*.*.*:*,http://192.168.*.*:*}") String allowedOriginPatterns
+    ) {
         this.aiAssistantWebSocketHandler = aiAssistantWebSocketHandler;
         this.jwtService = jwtService;
+        this.allowedOriginPatterns = splitCsv(allowedOriginPatterns);
     }
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(aiAssistantWebSocketHandler, "/ai-assistant/ws", "/ws/ai-assistant")
                 .addInterceptors(new JwtHandshakeInterceptor(jwtService))
-                .setAllowedOrigins("*");
+                .setAllowedOriginPatterns(allowedOriginPatterns);
+    }
+
+    @Bean
+    public ServletServerContainerFactoryBean webSocketContainer() {
+        ServletServerContainerFactoryBean container = new ServletServerContainerFactoryBean();
+        container.setMaxTextMessageBufferSize(AI_ASSISTANT_MESSAGE_BUFFER_SIZE);
+        container.setMaxBinaryMessageBufferSize(AI_ASSISTANT_MESSAGE_BUFFER_SIZE);
+        return container;
     }
 
     private static class JwtHandshakeInterceptor implements HandshakeInterceptor {
@@ -95,5 +114,15 @@ public class AiAssistantWebSocketConfig implements WebSocketConfigurer {
                     .findFirst()
                     .orElse("");
         }
+    }
+
+    private static String[] splitCsv(String value) {
+        if (value == null || value.isBlank()) {
+            return new String[0];
+        }
+        return Arrays.stream(value.split(","))
+                .map(String::trim)
+                .filter(item -> !item.isBlank())
+                .toArray(String[]::new);
     }
 }

@@ -27,9 +27,9 @@ public class SystemSettingsController {
     public Result getSettings() {
         List<Map<String, Object>> records = moduleRecordService.listModuleRecords(MODULE_NAME);
         if (records != null && !records.isEmpty()) {
-            return Result.success("get system settings success", records.get(0));
+            return Result.success("获取系统配置成功", records.get(0));
         }
-        return Result.success("get default system settings success", defaultSettings());
+        return Result.success("获取默认系统配置成功", defaultSettings());
     }
 
     @PutMapping("/system-settings")
@@ -38,7 +38,7 @@ public class SystemSettingsController {
         nextSettings.put("id", RECORD_ID);
         moduleRecordService.replaceModuleRecords(MODULE_NAME, List.of(nextSettings));
         businessLoopService.recordEvent("system-settings", "update", "\u5e73\u53f0\u53c2\u6570", "\u5df2\u4fdd\u5b58", Map.of("sectionCount", Math.max(0, nextSettings.size() - 1)));
-        return Result.success("save system settings success", nextSettings);
+        return Result.success("保存系统配置成功", nextSettings);
     }
 
     @PostMapping("/system-settings/reset")
@@ -46,7 +46,7 @@ public class SystemSettingsController {
         Map<String, Object> settings = defaultSettings();
         moduleRecordService.replaceModuleRecords(MODULE_NAME, List.of(settings));
         businessLoopService.recordEvent("system-settings", "reset", "\u5e73\u53f0\u53c2\u6570", "\u5df2\u6062\u590d\u9ed8\u8ba4", Map.of("sectionCount", Math.max(0, settings.size() - 1)));
-        return Result.success("reset system settings success", settings);
+        return Result.success("重置系统配置成功", settings);
     }
 
     private Map<String, Object> defaultSettings() {

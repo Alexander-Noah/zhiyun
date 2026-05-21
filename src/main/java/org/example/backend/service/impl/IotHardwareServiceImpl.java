@@ -624,6 +624,7 @@ public class IotHardwareServiceImpl implements IotHardwareService {
             case "人脸录入", "录入人脸", "face", "face-enroll", "face_enroll", "enroll-face" -> "face-enroll";
             case "指纹录入", "录入指纹", "fingerprint", "fingerprint-enroll", "fingerprint_enroll", "enroll-fingerprint" -> "fingerprint-enroll";
             case "电子锁", "锁状态", "门锁状态", "status", "lock-status", "lock_status" -> "status";
+            case "read-environment", "read_environment", "environment", "温湿度", "刷新温湿度" -> "read-environment";
             default -> value;
         };
     }

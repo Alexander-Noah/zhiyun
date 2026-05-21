@@ -17,6 +17,6 @@ public class BusinessLoopReportController {
 
     @GetMapping("/business-loop/overview")
     public Result getBusinessLoopOverview() {
-        return Result.success("business loop overview success", businessLoopReportService.getOverview());
+        return Result.success("获取业务闭环概览成功", businessLoopReportService.getOverview());
     }
 }

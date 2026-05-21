@@ -17,6 +17,6 @@ public class DashboardController {
 
     @GetMapping("/dashboard/overview")
     public Result getOverview() {
-        return Result.success("dashboard overview success", dashboardService.getOverview());
+        return Result.success("获取工作台概览成功", dashboardService.getOverview());
     }
 }

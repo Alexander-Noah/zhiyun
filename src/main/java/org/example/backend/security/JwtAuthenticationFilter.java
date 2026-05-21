@@ -36,6 +36,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             "/error",
             "/favicon.ico",
             "/actuator/health",
+            "/host-status/report",
+            "/host-status/latest",
+            "/host-assets/report",
+            "/host-assets",
 
             // Springdoc / Swagger
             "/v3/api-docs",
@@ -49,7 +53,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * 例如 /v3/api-docs/swagger-config
      */
     private static final String[] PUBLIC_PREFIXES = {
+            "/files/avatar-proxy",
             "/public/",
+            "/host-assets/",
             "/v3/api-docs/",
             "/swagger-ui/",
             "/webjars/"

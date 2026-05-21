@@ -20,7 +20,7 @@ public class UsageRecordController {
 
     @GetMapping("/usage-records")
     public Result listUsageRecords() {
-        return Result.success("list usage records success", usageRecordService.listUsageRecords());
+        return Result.success("获取使用记录成功", usageRecordService.listUsageRecords());
     }
 
     @PutMapping("/usage-records/batch")
@@ -28,27 +28,27 @@ public class UsageRecordController {
         List<UsageRecordEntity> records = request == null || request.getRecords() == null
                 ? Collections.emptyList()
                 : request.getRecords();
-        return Result.success("batch save usage records success", usageRecordService.replaceUsageRecords(records));
+        return Result.success("批量保存使用记录成功", usageRecordService.replaceUsageRecords(records));
     }
 
     @PostMapping("/usage-records/{id}/review")
     public Result reviewUsageRecord(@PathVariable Long id) {
-        return Result.success("review usage record success", usageRecordService.updateStatus(id, "正常"));
+        return Result.success("复核使用记录成功", usageRecordService.updateStatus(id, "正常"));
     }
 
     @PostMapping("/usage-records/{id}/abnormal")
     public Result abnormalUsageRecord(@PathVariable Long id) {
-        return Result.success("mark usage record abnormal success", usageRecordService.updateStatus(id, "异常"));
+        return Result.success("标记使用记录异常成功", usageRecordService.updateStatus(id, "异常"));
     }
 
     @PostMapping("/usage-records/{id}/archive")
     public Result archiveUsageRecord(@PathVariable Long id) {
-        return Result.success("archive usage record success", usageRecordService.updateStatus(id, "已归档"));
+        return Result.success("归档使用记录成功", usageRecordService.updateStatus(id, "已归档"));
     }
 
     @PostMapping("/usage-records/reset")
     public Result resetUsageRecords() {
-        return Result.success("reset usage records success", usageRecordService.resetUsageRecords());
+        return Result.success("重置使用记录成功", usageRecordService.resetUsageRecords());
     }
 
     @Data

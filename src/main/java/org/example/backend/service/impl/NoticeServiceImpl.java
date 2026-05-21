@@ -1,6 +1,7 @@
 package org.example.backend.service.impl;
 
 import org.example.backend.entity.NoticeEntity;
+import org.example.backend.entity.NoticeRecipientEntity;
 import org.example.backend.mapper.NoticeMapper;
 import org.example.backend.service.BusinessLoopService;
 import org.example.backend.service.NoticeService;
@@ -8,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -34,8 +36,9 @@ public class NoticeServiceImpl implements NoticeService {
         NoticeEntity normalizedNotice = normalizeNotice(notice);
         noticeMapper.insertNotice(normalizedNotice);
         NoticeEntity savedNotice = noticeMapper.getNotice(normalizedNotice.getId());
+        refreshRecipientsIfPublished(savedNotice);
         recordNoticeEvent("create", savedNotice);
-        return savedNotice;
+        return noticeMapper.getNotice(savedNotice.getId());
     }
 
     @Override
@@ -43,15 +46,16 @@ public class NoticeServiceImpl implements NoticeService {
     public NoticeEntity updateNotice(Long id, NoticeEntity notice) {
         noticeMapper.updateNotice(id, normalizeNotice(notice));
         NoticeEntity savedNotice = noticeMapper.getNotice(id);
+        refreshRecipientsIfPublished(savedNotice);
         recordNoticeEvent("update", savedNotice);
-        return savedNotice;
+        return noticeMapper.getNotice(id);
     }
 
     @Override
     @Transactional
     public List<NoticeEntity> deleteNotice(Long id) {
         NoticeEntity notice = noticeMapper.getNotice(id);
-        noticeMapper.deleteNotice(id);
+        noticeMapper.logicalDeleteNotice(id);
         businessLoopService.recordEvent("notice", "delete", notice == null ? String.valueOf(id) : notice.getTitle(), "\u5df2\u5220\u9664", Map.of("id", id));
         return noticeMapper.listNotices();
     }
@@ -59,9 +63,12 @@ public class NoticeServiceImpl implements NoticeService {
     @Override
     @Transactional
     public List<NoticeEntity> replaceNotices(List<NoticeEntity> notices) {
+        noticeMapper.deleteAllRecipients();
         noticeMapper.deleteAllNotices();
         for (NoticeEntity notice : notices == null ? Collections.<NoticeEntity>emptyList() : notices) {
-            noticeMapper.insertNotice(normalizeNotice(notice));
+            NoticeEntity normalizedNotice = normalizeNotice(notice);
+            noticeMapper.insertNotice(normalizedNotice);
+            refreshRecipientsIfPublished(noticeMapper.getNotice(normalizedNotice.getId()));
         }
         businessLoopService.recordEvent("notice", "batch-save", "\u901a\u77e5\u516c\u544a", "\u5df2\u540c\u6b65", Map.of("count", notices == null ? 0 : notices.size()));
         return noticeMapper.listNotices();
@@ -70,12 +77,128 @@ public class NoticeServiceImpl implements NoticeService {
     @Override
     @Transactional
     public List<NoticeEntity> resetNotices() {
+        noticeMapper.deleteAllRecipients();
         noticeMapper.deleteAllNotices();
         for (NoticeEntity notice : getDefaultNotices()) {
-            noticeMapper.insertNotice(notice);
+            noticeMapper.insertNotice(normalizeNotice(notice));
+            refreshRecipientsIfPublished(noticeMapper.getNotice(notice.getId()));
         }
         businessLoopService.recordEvent("notice", "reset", "\u901a\u77e5\u516c\u544a", "\u5df2\u6062\u590d\u521d\u59cb\u516c\u544a", Map.of("count", getDefaultNotices().size()));
         return noticeMapper.listNotices();
+    }
+
+    @Override
+    @Transactional
+    public NoticeEntity publishNotice(Long id) {
+        noticeMapper.publishNotice(id);
+        NoticeEntity notice = noticeMapper.getNotice(id);
+        refreshRecipientsIfPublished(notice);
+        recordNoticeEvent("publish", notice);
+        return noticeMapper.getNotice(id);
+    }
+
+    @Override
+    @Transactional
+    public NoticeEntity withdrawNotice(Long id) {
+        noticeMapper.updateNoticeStatus(id, "已撤回");
+        NoticeEntity notice = noticeMapper.getNotice(id);
+        recordNoticeEvent("withdraw", notice);
+        return notice;
+    }
+
+    @Override
+    @Transactional
+    public NoticeEntity archiveNotice(Long id) {
+        noticeMapper.archiveNotice(id);
+        NoticeEntity notice = noticeMapper.getNotice(id);
+        recordNoticeEvent("archive", notice);
+        return notice;
+    }
+
+    @Override
+    public List<NoticeRecipientEntity> listRecipients(Long noticeId) {
+        return noticeMapper.listRecipients(noticeId);
+    }
+
+    @Override
+    @Transactional
+    public List<NoticeRecipientEntity> listUserNotices(Integer userId, String roleCode, String readStatus) {
+        syncUserRecipients(userId, roleCode);
+        return noticeMapper.listUserNotices(userId, readStatus);
+    }
+
+    @Override
+    @Transactional
+    public NoticeRecipientEntity markRead(Long noticeId, Integer userId, String roleCode) {
+        syncUserRecipients(userId, roleCode);
+        noticeMapper.markRead(noticeId, userId);
+        return noticeMapper.listUserNotices(userId, null).stream()
+                .filter(item -> noticeId != null && noticeId.equals(item.getNoticeId()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, Object> getNoticeStats(Integer userId, String roleCode) {
+        return noticeMapper.getNoticeStats(userId);
+    }
+
+    @Override
+    @Transactional
+    public Map<String, Object> syncBusinessReminders() {
+        List<NoticeEntity> notices = new ArrayList<>();
+
+        for (Map<String, Object> item : noticeMapper.listLowStockConsumables()) {
+            notices.add(buildBusinessNotice(
+                    String.valueOf(item.get("name")) + "库存预警",
+                    "库存预警",
+                    "labAdmin",
+                    "consumable",
+                    String.valueOf(item.get("id")),
+                    "当前库存 " + item.get("stock") + firstNonBlank(String.valueOf(item.get("unit")), "件")
+                            + "，低于预警阈值 " + item.get("warnThreshold") + "，请及时补货。"
+            ));
+        }
+
+        for (Map<String, Object> item : noticeMapper.listPendingReservations()) {
+            notices.add(buildBusinessNotice(
+                    "预约审批待处理：" + firstNonBlank(String.valueOf(item.get("applicantName")), "预约申请"),
+                    "预约审批",
+                    "labAdmin",
+                    "reservation",
+                    String.valueOf(item.get("id")),
+                    "申请实验室：" + firstNonBlank(String.valueOf(item.get("labName")), "-")
+                            + "，时间：" + item.get("reservationDate") + " " + item.get("timeRange")
+                            + "，状态：" + item.get("status") + "。"
+            ));
+        }
+
+        for (Map<String, Object> item : noticeMapper.listActiveRepairs()) {
+            notices.add(buildBusinessNotice(
+                    "设备维修待处理：" + firstNonBlank(String.valueOf(item.get("ticket")), "维修工单"),
+                    "设备维修",
+                    "maintenance",
+                    "repair",
+                    String.valueOf(item.get("id")),
+                    "设备：" + firstNonBlank(String.valueOf(item.get("deviceName")), "-")
+                            + "，故障类型：" + firstNonBlank(String.valueOf(item.get("faultType")), "-")
+                            + "，状态：" + item.get("status") + "。"
+            ));
+        }
+
+        int publishedCount = 0;
+        for (NoticeEntity notice : notices) {
+            if (noticeMapper.countNoticeBySource(notice.getSourceModule(), notice.getSourceId()) > 0) {
+                continue;
+            }
+            noticeMapper.insertNotice(normalizeNotice(notice));
+            refreshRecipientsIfPublished(noticeMapper.getNotice(notice.getId()));
+            publishedCount++;
+        }
+
+        businessLoopService.recordEvent("notice", "sync-business-reminders", "业务提醒", "已同步", Map.of("count", publishedCount));
+        return Map.of("created", publishedCount);
     }
 
     private void recordNoticeEvent(String action, NoticeEntity notice) {
@@ -88,6 +211,23 @@ public class NoticeServiceImpl implements NoticeService {
         details.put("type", firstNonBlank(notice.getNoticeType(), notice.getType()));
         details.put("target", firstNonBlank(notice.getTargetRole(), notice.getTarget()));
         businessLoopService.recordEvent("notice", action, firstNonBlank(notice.getTitle(), "\u901a\u77e5\u516c\u544a"), firstNonBlank(notice.getPublishStatus(), notice.getStatus()), details);
+    }
+
+    private void refreshRecipientsIfPublished(NoticeEntity notice) {
+        if (notice == null || notice.getId() == null || !"已发布".equals(firstNonBlank(notice.getPublishStatus(), notice.getStatus()))) {
+            return;
+        }
+
+        noticeMapper.deleteRecipientsByNotice(notice.getId());
+        noticeMapper.insertRecipientsForRole(notice.getId(), normalizeTargetRole(firstNonBlank(notice.getTargetRole(), notice.getTarget())));
+    }
+
+    private void syncUserRecipients(Integer userId, String roleCode) {
+        if (userId == null) {
+            return;
+        }
+
+        noticeMapper.syncUserRecipients(userId, normalizeTargetRole(roleCode));
     }
 
     private NoticeEntity normalizeNotice(NoticeEntity notice) {
@@ -115,6 +255,11 @@ public class NoticeServiceImpl implements NoticeService {
             normalizedNotice.setTarget("labAdmin");
             normalizedNotice.setTargetRole("labAdmin");
         }
+        normalizedNotice.setTargetRole(normalizeTargetRole(normalizedNotice.getTargetRole()));
+        normalizedNotice.setTarget(normalizedNotice.getTargetRole());
+        if (isBlank(normalizedNotice.getPriority())) {
+            normalizedNotice.setPriority("普通");
+        }
         if (isBlank(normalizedNotice.getPublishStatus())) {
             normalizedNotice.setPublishStatus(normalizedNotice.getStatus());
         }
@@ -128,10 +273,29 @@ public class NoticeServiceImpl implements NoticeService {
         if (isBlank(normalizedNotice.getContent())) {
             normalizedNotice.setContent(normalizedNotice.getTitle());
         }
-        if ("已发布".equals(normalizedNotice.getStatus()) && normalizedNotice.getPublishTime() == null) {
+        if ("已发布".equals(firstNonBlank(normalizedNotice.getStatus(), normalizedNotice.getPublishStatus()))
+                && normalizedNotice.getPublishTime() == null) {
             normalizedNotice.setPublishTime(LocalDateTime.now());
         }
         return normalizedNotice;
+    }
+
+    private NoticeEntity buildBusinessNotice(String title, String type, String targetRole, String sourceModule, String sourceId, String content) {
+        NoticeEntity notice = new NoticeEntity();
+        notice.setTitle(title);
+        notice.setType(type);
+        notice.setNoticeType(type);
+        notice.setTarget(targetRole);
+        notice.setTargetRole(targetRole);
+        notice.setPriority("高");
+        notice.setSourceModule(sourceModule);
+        notice.setSourceId(sourceId);
+        notice.setBusinessType(type);
+        notice.setContent(content);
+        notice.setStatus("已发布");
+        notice.setPublishStatus("已发布");
+        notice.setPublishTime(LocalDateTime.now());
+        return notice;
     }
 
     private List<NoticeEntity> getDefaultNotices() {
@@ -164,10 +328,30 @@ public class NoticeServiceImpl implements NoticeService {
 
     private String firstNonBlank(String... values) {
         for (String value : values) {
-            if (value != null && !value.isBlank()) {
+            if (value != null && !value.isBlank() && !"null".equalsIgnoreCase(value)) {
                 return value;
             }
         }
         return "";
+    }
+
+    private String normalizeTargetRole(String value) {
+        String text = firstNonBlank(value, "labAdmin");
+        if ("all".equalsIgnoreCase(text) || text.contains("全部")) {
+            return "all";
+        }
+        if ("systemAdmin".equalsIgnoreCase(text) || text.contains("系统") || text.contains("平台")) {
+            return "systemAdmin";
+        }
+        if ("teacher".equalsIgnoreCase(text) || text.contains("教师") || text.contains("任课") || text.contains("业务使用方")) {
+            return "teacher";
+        }
+        if ("maintenance".equalsIgnoreCase(text) || text.contains("维修") || text.contains("运维")) {
+            return "maintenance";
+        }
+        if ("labAdmin".equalsIgnoreCase(text) || text.contains("实验室")) {
+            return "labAdmin";
+        }
+        return text;
     }
 }

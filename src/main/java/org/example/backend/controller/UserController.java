@@ -5,6 +5,7 @@ import org.example.backend.entity.UserEntity;
 import org.example.backend.result.Result;
 import org.example.backend.security.JwtAuthenticationFilter;
 import org.example.backend.security.JwtService;
+import org.example.backend.security.LoginAttemptLimiter;
 import org.example.backend.service.UserService;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,21 +17,26 @@ import java.util.Map;
 public class UserController {
     private final UserService userService;
     private final JwtService jwtService;
+    private final LoginAttemptLimiter loginAttemptLimiter;
 
-    public UserController(UserService userService, JwtService jwtService) {
+    public UserController(UserService userService, JwtService jwtService, LoginAttemptLimiter loginAttemptLimiter) {
         this.userService = userService;
         this.jwtService = jwtService;
+        this.loginAttemptLimiter = loginAttemptLimiter;
     }
 
     @PostMapping("/auth/login")
-    public Result login(@RequestBody Map<String, String> params) {
-        String username = params.get("username");
-        String password = params.get("password");
+    public Result login(@RequestBody(required = false) Map<String, String> params, HttpServletRequest request) {
+        String username = params == null ? "" : params.get("username");
+        String password = params == null ? "" : params.get("password");
+        loginAttemptLimiter.assertAllowed(username, request);
         UserEntity user = userService.login(username, password);
         if (user == null) {
+            loginAttemptLimiter.recordFailure(username, request);
             return Result.error("\u7528\u6237\u540d\u6216\u5bc6\u7801\u9519\u8bef");
         }
 
+        loginAttemptLimiter.recordSuccess(username, request);
         String token = jwtService.generateToken(user);
         return Result.success(Map.of(
                 "token", token,
@@ -41,7 +47,7 @@ public class UserController {
 
     @PostMapping("/auth/logout")
     public Result logout() {
-        return Result.success("logout success");
+        return Result.success("退出登录成功");
     }
 
     @GetMapping("/auth/profile")
@@ -63,30 +69,30 @@ public class UserController {
 
         UserEntity user = userService.profile(targetUsername);
         if (user != null) {
-            return Result.success("get profile success", sanitizeUser(user));
+        return Result.success("获取个人资料成功", sanitizeUser(user));
         }
         return Result.error("\u7528\u6237\u4e0d\u5b58\u5728");
     }
 
     @GetMapping({"/users", "/admin/users"})
     public Result listUsers() {
-        return Result.success("list users success", sanitizeUsers(userService.listUsers()));
+        return Result.success("获取用户列表成功", sanitizeUsers(userService.listUsers()));
     }
 
     @PostMapping({"/users", "/admin/users"})
     public Result createUser(@RequestBody UserEntity user) {
-        return Result.success("create user success", sanitizeUser(userService.createUser(user)));
+        return Result.success("新增用户成功", sanitizeUser(userService.createUser(user)));
     }
 
     @PutMapping({"/users/{id}", "/admin/users/{id}"})
     public Result updateUser(@PathVariable Integer id, @RequestBody UserEntity user) {
-        return Result.success("update user success", sanitizeUser(userService.updateUser(id, user)));
+        return Result.success("更新用户成功", sanitizeUser(userService.updateUser(id, user)));
     }
 
     @PostMapping({"/users/{id}/status", "/admin/users/{id}/status"})
     public Result updateUserStatus(@PathVariable Integer id, @RequestBody(required = false) Map<String, Integer> payload) {
         Integer status = payload == null ? 1 : payload.get("status");
-        return Result.success("update user status success", sanitizeUser(userService.updateUserStatus(id, status)));
+        return Result.success("更新用户状态成功", sanitizeUser(userService.updateUserStatus(id, status)));
     }
 
     private String stringAttribute(HttpServletRequest request, String name) {

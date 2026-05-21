@@ -1,61 +1,140 @@
+# =============================
+# 后端基础服务配置
+# =============================
 server:
+  # Spring Boot HTTP 服务端口；前端 Vite 代理默认会转发到这个端口。
   port: 8080
+
 spring:
   application:
+    # 应用名称，主要用于日志、监控和服务识别。
     name: Backend
   datasource:
-    url: jdbc:mysql://localhost:3306/smart_lab_basic
-    username: root
-    password: root
+    # MySQL 数据库连接地址；smart_lab_basic 是当前业务库名称。
+    url: ${SMART_LAB_DB_URL:jdbc:mysql://localhost:3306/smart_lab_basic}
+    # 数据库用户名。
+    username: ${SMART_LAB_DB_USERNAME:root}
+    # 数据库密码；生产环境建议改为环境变量或外部配置，不要写入仓库。
+    password: ${SMART_LAB_DB_PASSWORD:root}
+    # MySQL JDBC 驱动类。
     driver-class-name: com.mysql.cj.jdbc.Driver
+
+# =============================
+# MyBatis 配置
+# =============================
 mybatis:
+  # 不强制检查独立 mybatis-config.xml，当前主要使用 Spring Boot 配置项。
   check-config-location: false
+  # 自定义类型处理器所在包；用于字段类型转换。
   type-handlers-package: com.smartlab.basic.handler
+  # Mapper XML 文件位置。
   mapper-locations: classpath*:mapper/*.xml
   configuration:
+    # 数据库字段下划线命名自动映射为 Java 驼峰命名。
+
+
     map-underscore-to-camel-case: true
 
+# =============================
+# 通义千问 / DashScope 智能助手配置
+# =============================
 tongyi:
   agent:
+    # 是否启用后端 AI 问答能力。
     enabled: true
+    # DashScope OpenAI 兼容接口地址。
     base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    # 使用的模型名称。
     model: qwen-plus
-    api-key: sk-8e60b2cf948f4fcb9808cad5680d47a5
+    # 图片识别/多模态问答使用的视觉模型；可通过 TONGYI_VISION_MODEL 环境变量覆盖。
+    vision-model: qwen-vl-plus
+    # DashScope API Key；必须通过环境变量注入，避免真实密钥进入代码仓库。
+    api-key: ${DASHSCOPE_API_KEY:${TONGYI_API_KEY:}}
 
+# =============================
+# 语音识别配置
+# =============================
 speech:
   vosk:
+    # Vosk 中文语音模型路径；可通过 VOSK_MODEL_PATH 环境变量覆盖。
     model-path: ${VOSK_MODEL_PATH:../vosk-model-small-cn-0.22/vosk-model-small-cn-0.22}
 
+# =============================
+# 课表抓取与导入脚本配置
+# =============================
 timetable:
   crawler:
+    # 执行 Python 脚本的命令或解释器路径。
     python: ${TIMETABLE_CRAWLER_PYTHON:python}
+    # 课表抓取脚本路径。
     script-path: ${TIMETABLE_CRAWLER_SCRIPT:Python/crawl_school_timetable.py}
+    # 抓取结果解析入库脚本路径。
     import-script-path: ${TIMETABLE_IMPORT_SCRIPT:Python/parse_and_import_timetable.py}
+    # 脚本执行工作目录。
     working-dir: ${TIMETABLE_CRAWLER_WORKDIR:Python}
+    # 脚本最大执行时间，单位秒。
     timeout-seconds: ${TIMETABLE_CRAWLER_TIMEOUT_SECONDS:600}
+    # 是否使用无头浏览器模式。
     headless: ${TIMETABLE_CRAWLER_HEADLESS:true}
 
+# =============================
+# 智云实验室业务配置
+# =============================
 smart-lab:
   security:
     jwt:
+      # 是否启用 JWT 登录态校验。
       enabled: true
+      # JWT 签名密钥；生产环境必须通过 SMART_LAB_JWT_SECRET 覆盖默认值。
       secret: ${SMART_LAB_JWT_SECRET:smart-lab-dev-jwt-secret-change-in-production-2026}
+      # JWT 签发方，用于防止其他系统签发的 token 混用。
+      issuer: ${SMART_LAB_JWT_ISSUER:smart-lab}
+      # JWT 有效期，单位秒；7200 秒等于 2 小时。
       expiration-seconds: 7200
     password:
+      # 密码哈希迭代次数；数值越高越安全但登录耗时越长。
       iterations: 120000
+    cors:
+      # 明确允许的前端来源，多个地址用英文逗号分隔。
+      allowed-origins: ${SMART_LAB_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://10.25.133.199:5173,http://10.27.133.112:5173}
+      # 开发调试来源匹配规则；生产环境建议收紧为正式域名。
+      allowed-origin-patterns: ${SMART_LAB_CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:*,http://127.0.0.1:*,http://10.*.*.*:*,http://172.*.*.*:*,http://192.168.*.*:*}
+    headers:
+      # 是否启用统一安全响应头。
+      enabled: true
+    login-rate-limit:
+      # 同一账号和 IP 连续登录失败上限。
+      max-attempts: 5
+      # 触发失败上限后的锁定时长，单位秒。
+      lock-seconds: 900
   iot:
+    # 是否启用硬件控制适配层。
     enabled: true
+    # 调用硬件设备接口的默认超时时间。
     timeout: 5s
+    # 硬件设备清单；正式接入可参考 application-iot-example.yaml。
     devices: []
   oss:
-    enabled: ${SMART_LAB_OSS_ENABLED:false}
-    endpoint: ${ALIYUN_OSS_ENDPOINT:}
-    bucket: ${ALIYUN_OSS_BUCKET:}
+    # 是否启用阿里云 OSS 文件上传。
+    enabled: ${SMART_LAB_OSS_ENABLED:true}
+    # OSS endpoint，例如 oss-cn-hangzhou.aliyuncs.com。
+    endpoint: ${ALIYUN_OSS_ENDPOINT:oss-cn-beijing.aliyuncs.com}
+    # OSS bucket 名称。
+    bucket: ${ALIYUN_OSS_BUCKET:zhibi1}
+    # OSS AccessKey ID。
     access-key-id: ${ALIYUN_OSS_ACCESS_KEY_ID:}
+    # OSS AccessKey Secret。
     access-key-secret: ${ALIYUN_OSS_ACCESS_KEY_SECRET:}
+    # 文件公开访问基础地址；配置 CDN 或 bucket 公网域名。
     public-base-url: ${ALIYUN_OSS_PUBLIC_BASE_URL:}
-    avatar-dir: ${ALIYUN_OSS_AVATAR_DIR:avatars}
+    # 用户头像上传目录。
+    avatar-dir: ${ALIYUN_OSS_AVATAR_DIR:zhiyun}  
 
+# =============================
+# OpenAPI / Swagger 文档配置
+# =============================
 springdoc:
+  # 仅扫描控制器包，避免无关类进入接口文档。
   packages-to-scan: org.example.backend.controller
+  # 暴露所有 Controller 路径到 OpenAPI 文档。
   paths-to-match: /**

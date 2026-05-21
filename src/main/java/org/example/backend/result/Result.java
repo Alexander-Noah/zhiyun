@@ -8,7 +8,7 @@ import lombok.Data;
 public class Result {
     private static final Integer SUCCESS_CODE = 200;
     private static final Integer ERROR_CODE = -1;
-    private static final String SUCCESS_MESSAGE = "success";
+    private static final String SUCCESS_MESSAGE = "操作成功";
 
     private Integer code;
     private String message;

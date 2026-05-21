@@ -1,6 +1,7 @@
 package org.example.backend.controller;
 
 import jakarta.servlet.http.HttpServletRequest;
+import org.example.backend.result.Result;
 import org.example.backend.service.TongyiAgentService;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,7 +20,7 @@ public class AiAssistantConfigController {
     }
 
     @GetMapping({"/config", "/ai-assistant/config"})
-    public Map<String, Object> getConfig(HttpServletRequest request) {
+    public Result getConfig(HttpServletRequest request) {
         String host = request.getServerName();
         int port = request.getServerPort();
         String scheme = request.getScheme();
@@ -33,10 +34,6 @@ public class AiAssistantConfigController {
         data.put("agent_provider", "tongyi");
         data.put("tongyi_agent", tongyiAgentService.getConfig());
 
-        return Map.of(
-                "code", 0,
-                "message", "config loaded",
-                "data", data
-        );
+        return Result.success("获取 AI 助手配置成功", data);
     }
 }

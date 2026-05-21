@@ -26,7 +26,7 @@ public class AiConversationController {
     public Result listConversations(
             @RequestAttribute(value = JwtAuthenticationFilter.AUTH_USER_ID_ATTRIBUTE, required = false) Integer userId
     ) {
-        return Result.success("list ai conversations success", aiConversationService.listConversations(userId));
+        return Result.success("获取 AI 会话记录成功", aiConversationService.listConversations(userId));
     }
 
     @PutMapping("/ai-assistant/conversations")
@@ -37,7 +37,7 @@ public class AiConversationController {
         List<Map<String, Object>> conversations = request == null || request.getConversations() == null
                 ? Collections.emptyList()
                 : request.getConversations();
-        return Result.success("save ai conversations success", aiConversationService.saveConversations(userId, conversations));
+        return Result.success("保存 AI 会话记录成功", aiConversationService.saveConversations(userId, conversations));
     }
 
     @Data

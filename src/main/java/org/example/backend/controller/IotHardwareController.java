@@ -27,39 +27,39 @@ public class IotHardwareController {
 
     @GetMapping("/iot/hardware")
     public Result getHardwareOverview() {
-        return Result.success("get iot hardware success", iotHardwareService.getOverview());
+        return Result.success("获取物联网硬件概览成功", iotHardwareService.getOverview());
     }
 
     @GetMapping("/iot/hardware/devices")
     public Result listHardwareDevices() {
-        return Result.success("list iot hardware devices success", iotHardwareService.listHardwareDevices());
+        return Result.success("获取物联网设备列表成功", iotHardwareService.listHardwareDevices());
     }
 
     @GetMapping("/iot/labs/{labId:\\d+}/devices")
     public Result listLabDevices(@PathVariable Long labId) {
-        return Result.success("list lab iot devices success", iotHardwareService.getLabDevices(labId));
+        return Result.success("获取实验室物联网设备成功", iotHardwareService.getLabDevices(labId));
     }
 
     @GetMapping("/iot/labs/{labId:\\d+}/status")
     public Result getLabHardwareStatus(@PathVariable Long labId) {
-        return Result.success("get lab iot status success", iotHardwareService.getLabStatus(labId));
+        return Result.success("获取实验室物联网状态成功", iotHardwareService.getLabStatus(labId));
     }
 
     @PostMapping("/iot/labs/{labId:\\d+}/access")
     public Result executeAccessCommand(@PathVariable Long labId, @RequestBody(required = false) HardwareActionRequest request) {
         String action = request == null || request.getAction() == null ? "open" : request.getAction();
         Map<String, Object> payload = request == null || request.getPayload() == null ? Collections.emptyMap() : request.getPayload();
-        return Result.success("execute access command success", iotHardwareService.executeAccessCommand(labId, action, payload));
+        return Result.success("执行门禁指令成功", iotHardwareService.executeAccessCommand(labId, action, payload));
     }
 
     @GetMapping("/iot/labs/{labId:\\d+}/camera")
     public Result getLabCamera(@PathVariable Long labId) {
-        return Result.success("get lab camera success", iotHardwareService.getLabCamera(labId));
+        return Result.success("获取实验室摄像头成功", iotHardwareService.getLabCamera(labId));
     }
 
     @GetMapping("/iot/devices/{code}/status")
     public Result getDeviceStatus(@PathVariable String code) {
-        return Result.success("get iot device status success", iotHardwareService.getDeviceStatus(code));
+        return Result.success("获取物联网设备状态成功", iotHardwareService.getDeviceStatus(code));
     }
 
     @PostMapping("/iot/devices/{code}/commands/{action}")
@@ -68,7 +68,7 @@ public class IotHardwareController {
             @PathVariable String action,
             @RequestBody(required = false) Map<String, Object> payload
     ) {
-        return Result.success("execute iot device command success", iotHardwareService.executeDeviceCommand(
+        return Result.success("执行物联网设备指令成功", iotHardwareService.executeDeviceCommand(
                 code,
                 action,
                 payload == null ? Collections.emptyMap() : payload

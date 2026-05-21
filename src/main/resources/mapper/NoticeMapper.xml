@@ -10,17 +10,30 @@
         notice_type as type,
         target_role as targetRole,
         target_role as target,
+        priority,
+        source_module as sourceModule,
+        source_id as sourceId,
+        business_type as businessType,
         content,
         publish_status as publishStatus,
         publish_status as status,
         publish_time as publishTime,
+        withdrawn_at as withdrawnAt,
+        archived_at as archivedAt,
+        deleted,
+        deleted_at as deletedAt,
         created_by as createdBy,
         case
             when publish_status = '已发布' then 'success'
             when publish_status = '定时发布' then 'primary'
+            when publish_status = '已撤回' then 'warning'
+            when publish_status = '已归档' then 'info'
             when publish_status = '草稿' then 'info'
             else 'warning'
         end as tagType,
+        coalesce(stats.recipient_count, 0) as recipientCount,
+        coalesce(stats.read_count, 0) as readCount,
+        greatest(coalesce(stats.recipient_count, 0) - coalesce(stats.read_count, 0), 0) as unreadCount,
         created_at as createdAt,
         updated_at as updatedAt
     </sql>
@@ -28,15 +41,34 @@
     <select id="listNotices" resultType="org.example.backend.entity.NoticeEntity">
         select
         <include refid="noticeColumns" />
-        from notice
+        from notice n
+        left join (
+            select
+                notice_id,
+                count(1) as recipient_count,
+                sum(case when read_status = '已读' then 1 else 0 end) as read_count
+            from notice_recipient
+            where deleted = 0
+            group by notice_id
+        ) stats on stats.notice_id = n.id
+        where coalesce(n.deleted, 0) = 0
         order by coalesce(publish_time, created_at) desc, id desc
     </select>
 
     <select id="getNotice" resultType="org.example.backend.entity.NoticeEntity">
         select
         <include refid="noticeColumns" />
-        from notice
-        where id = #{id}
+        from notice n
+        left join (
+            select
+                notice_id,
+                count(1) as recipient_count,
+                sum(case when read_status = '已读' then 1 else 0 end) as read_count
+            from notice_recipient
+            where deleted = 0
+            group by notice_id
+        ) stats on stats.notice_id = n.id
+        where n.id = #{id}
     </select>
 
     <insert id="insertNotice" useGeneratedKeys="true" keyProperty="id">
@@ -44,6 +76,10 @@
             title,
             notice_type,
             target_role,
+            priority,
+            source_module,
+            source_id,
+            business_type,
             content,
             publish_status,
             publish_time,
@@ -53,9 +89,13 @@
             #{title},
             coalesce(nullif(#{noticeType}, ''), nullif(#{type}, ''), '系统提醒'),
             coalesce(nullif(#{targetRole}, ''), nullif(#{target}, ''), 'labAdmin'),
+            coalesce(nullif(#{priority}, ''), '普通'),
+            nullif(#{sourceModule}, ''),
+            nullif(#{sourceId}, ''),
+            nullif(#{businessType}, ''),
             #{content},
             coalesce(nullif(#{publishStatus}, ''), nullif(#{status}, ''), '草稿'),
-            coalesce(#{publishTime}, now()),
+            #{publishTime},
             #{createdBy}
         )
     </insert>
@@ -65,6 +105,10 @@
         set title = #{notice.title},
             notice_type = coalesce(nullif(#{notice.noticeType}, ''), nullif(#{notice.type}, ''), notice_type),
             target_role = coalesce(nullif(#{notice.targetRole}, ''), nullif(#{notice.target}, ''), target_role),
+            priority = coalesce(nullif(#{notice.priority}, ''), priority),
+            source_module = nullif(#{notice.sourceModule}, ''),
+            source_id = nullif(#{notice.sourceId}, ''),
+            business_type = nullif(#{notice.businessType}, ''),
             content = #{notice.content},
             publish_status = coalesce(nullif(#{notice.publishStatus}, ''), nullif(#{notice.status}, ''), publish_status),
             publish_time = coalesce(#{notice.publishTime}, publish_time),
@@ -80,4 +124,256 @@
     <delete id="deleteAllNotices">
         delete from notice
     </delete>
+
+    <update id="publishNotice">
+        update notice
+        set publish_status = '已发布',
+            publish_time = coalesce(publish_time, now()),
+            withdrawn_at = null,
+            archived_at = null,
+            deleted = 0,
+            deleted_at = null,
+            updated_at = now()
+        where id = #{id}
+    </update>
+
+    <update id="updateNoticeStatus">
+        update notice
+        set publish_status = #{status},
+            withdrawn_at = case when #{status} = '已撤回' then now() else withdrawn_at end,
+            archived_at = case when #{status} = '已归档' then now() else archived_at end,
+            updated_at = now()
+        where id = #{id}
+    </update>
+
+    <update id="archiveNotice">
+        update notice
+        set publish_status = '已归档',
+            archived_at = now(),
+            updated_at = now()
+        where id = #{id}
+    </update>
+
+    <update id="logicalDeleteNotice">
+        update notice
+        set deleted = 1,
+            deleted_at = now(),
+            updated_at = now()
+        where id = #{id}
+    </update>
+
+    <delete id="deleteRecipientsByNotice">
+        delete from notice_recipient
+        where notice_id = #{noticeId}
+    </delete>
+
+    <delete id="deleteAllRecipients">
+        delete from notice_recipient
+    </delete>
+
+    <insert id="insertRecipientsForRole">
+        insert ignore into notice_recipient (
+            notice_id,
+            user_id,
+            username,
+            real_name,
+            role_code
+        )
+        select
+            #{noticeId},
+            u.id,
+            u.username,
+            u.real_name,
+            r.role_code
+        from sys_user u
+        left join user_role ur on ur.user_id = u.id
+        left join role r on r.id = ur.role_id
+        where coalesce(u.status, 1) = 1
+          and (
+            #{targetRole} = 'all'
+            or r.role_code = #{targetRole}
+          )
+    </insert>
+
+    <insert id="syncUserRecipients">
+        insert ignore into notice_recipient (
+            notice_id,
+            user_id,
+            username,
+            real_name,
+            role_code
+        )
+        select
+            n.id,
+            u.id,
+            u.username,
+            u.real_name,
+            r.role_code
+        from notice n
+        join sys_user u on u.id = #{userId}
+        left join user_role ur on ur.user_id = u.id
+        left join role r on r.id = ur.role_id
+        where coalesce(n.deleted, 0) = 0
+          and n.publish_status = '已发布'
+          and coalesce(u.status, 1) = 1
+          and (
+            n.target_role in ('all', '全部用户')
+            or n.target_role = #{roleCode}
+            or (
+                #{roleCode} = 'labAdmin'
+                and n.target_role in ('实验室管理员', '实验室管理员端')
+            )
+            or (
+                #{roleCode} = 'systemAdmin'
+                and n.target_role in ('系统管理员', '平台管理员')
+            )
+            or (
+                #{roleCode} = 'teacher'
+                and n.target_role in ('教师', '任课教师', '业务使用方')
+            )
+            or (
+                #{roleCode} = 'maintenance'
+                and n.target_role in ('维修人员', '运维人员')
+            )
+          )
+    </insert>
+
+    <sql id="recipientColumns">
+        nr.id,
+        nr.notice_id as noticeId,
+        nr.user_id as userId,
+        nr.username,
+        nr.real_name as realName,
+        nr.role_code as roleCode,
+        nr.read_status as readStatus,
+        nr.read_time as readTime,
+        nr.archived,
+        nr.archived_at as archivedAt,
+        nr.deleted,
+        nr.deleted_at as deletedAt,
+        nr.created_at as createdAt,
+        nr.updated_at as updatedAt,
+        n.title,
+        n.notice_type as noticeType,
+        n.notice_type as type,
+        n.target_role as targetRole,
+        n.target_role as target,
+        n.priority,
+        n.source_module as sourceModule,
+        n.source_id as sourceId,
+        n.business_type as businessType,
+        n.content,
+        n.publish_status as publishStatus,
+        n.publish_status as status,
+        n.publish_time as publishTime,
+        case
+            when nr.read_status = '未读' then 'warning'
+            when n.publish_status = '已发布' then 'success'
+            else 'info'
+        end as tagType
+    </sql>
+
+    <select id="listRecipients" resultType="org.example.backend.entity.NoticeRecipientEntity">
+        select
+        <include refid="recipientColumns" />
+        from notice_recipient nr
+        join notice n on n.id = nr.notice_id
+        where nr.notice_id = #{noticeId}
+        order by nr.read_status desc, nr.id desc
+    </select>
+
+    <select id="listUserNotices" resultType="org.example.backend.entity.NoticeRecipientEntity">
+        select
+        <include refid="recipientColumns" />
+        from notice_recipient nr
+        join notice n on n.id = nr.notice_id
+        where nr.user_id = #{userId}
+          and coalesce(n.deleted, 0) = 0
+          and coalesce(nr.deleted, 0) = 0
+          and coalesce(nr.archived, 0) = 0
+          and n.publish_status = '已发布'
+          <if test="readStatus != null and readStatus != ''">
+              and nr.read_status = #{readStatus}
+          </if>
+        order by n.publish_time desc, nr.id desc
+    </select>
+
+    <update id="markRead">
+        update notice_recipient
+        set read_status = '已读',
+            read_time = coalesce(read_time, now()),
+            updated_at = now()
+        where notice_id = #{noticeId}
+          and user_id = #{userId}
+          and deleted = 0
+    </update>
+
+    <select id="getNoticeStats" resultType="map">
+        select
+            (select count(1) from notice where coalesce(deleted, 0) = 0) as total,
+            (select count(1) from notice where coalesce(deleted, 0) = 0 and publish_status = '草稿') as draftCount,
+            (select count(1) from notice where coalesce(deleted, 0) = 0 and publish_status = '已发布') as publishedCount,
+            (select count(1) from notice where coalesce(deleted, 0) = 0 and publish_status = '已撤回') as withdrawnCount,
+            (select count(1) from notice where coalesce(deleted, 0) = 0 and publish_status = '已归档') as archivedCount,
+            (select count(1) from notice_recipient where deleted = 0) as deliveryCount,
+            (select count(1) from notice_recipient where deleted = 0 and read_status = '已读') as readCount,
+            (select count(1) from notice_recipient where deleted = 0 and read_status = '未读') as unreadCount,
+            (select count(1) from notice_recipient where deleted = 0 and user_id = #{userId}) as myTotal,
+            (select count(1) from notice_recipient where deleted = 0 and user_id = #{userId} and read_status = '未读') as myUnread,
+            (select count(1) from notice_recipient where deleted = 0 and user_id = #{userId} and read_status = '已读') as myRead
+    </select>
+
+    <select id="countNoticeBySource" resultType="int">
+        select count(1)
+        from notice
+        where source_module = #{sourceModule}
+          and source_id = #{sourceId}
+          and coalesce(deleted, 0) = 0
+    </select>
+
+    <select id="listLowStockConsumables" resultType="map">
+        select
+            id,
+            name,
+            stock,
+            unit,
+            warn_threshold as warnThreshold,
+            status
+        from consumable_inventory
+        where stock &lt;= warn_threshold
+        order by stock asc, id desc
+        limit 20
+    </select>
+
+    <select id="listPendingReservations" resultType="map">
+        select
+            r.id,
+            r.applicant_name as applicantName,
+            l.lab_name as labName,
+            r.reservation_date as reservationDate,
+            r.time_range as timeRange,
+            r.status
+        from lab_reservation r
+        left join lab l on l.id = r.lab_id
+        where r.status in ('待审核', '冲突')
+        order by r.created_at desc
+        limit 20
+    </select>
+
+    <select id="listActiveRepairs" resultType="map">
+        select
+            r.id,
+            r.order_no as ticket,
+            r.fault_type as faultType,
+            r.priority_level as priority,
+            r.status,
+            l.lab_name as labName,
+            d.device_name as deviceName
+        from repair_order r
+        left join lab l on l.id = r.lab_id
+        left join device d on d.id = r.device_id
+        where r.status not in ('已完成', '已关闭', '已取消')
+        order by r.id desc
+        limit 20
+    </select>
 </mapper>

@@ -32,9 +32,9 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
             log.info("request start method={} uri={} query={} ip={} userAgent={}",
                     request.getMethod(),
                     request.getRequestURI(),
-                    request.getQueryString(),
+                    maskQuery(request.getQueryString()),
                     getClientIp(request),
-                    request.getHeader("User-Agent"));
+                    limitLength(request.getHeader("User-Agent"), 160));
 
             filterChain.doFilter(request, response);
         } finally {
@@ -68,5 +68,44 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
         }
 
         return request.getRemoteAddr();
+    }
+
+    private String maskQuery(String query) {
+        if (query == null || query.isBlank()) {
+            return query;
+        }
+
+        StringBuilder masked = new StringBuilder();
+        String[] parts = query.split("&");
+        for (int index = 0; index < parts.length; index++) {
+            if (index > 0) {
+                masked.append('&');
+            }
+            String part = parts[index];
+            int equalsIndex = part.indexOf('=');
+            String key = equalsIndex >= 0 ? part.substring(0, equalsIndex) : part;
+            if (isSensitiveKey(key)) {
+                masked.append(key).append("=******");
+            } else {
+                masked.append(limitLength(part, 120));
+            }
+        }
+        return limitLength(masked.toString(), 500);
+    }
+
+    private boolean isSensitiveKey(String key) {
+        String normalizedKey = key == null ? "" : key.toLowerCase();
+        return normalizedKey.contains("token")
+                || normalizedKey.contains("password")
+                || normalizedKey.contains("secret")
+                || normalizedKey.contains("key")
+                || normalizedKey.contains("authorization");
+    }
+
+    private String limitLength(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength) + "...";
     }
 }

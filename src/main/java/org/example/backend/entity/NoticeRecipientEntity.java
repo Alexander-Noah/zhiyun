@@ -5,8 +5,22 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-public class NoticeEntity {
+public class NoticeRecipientEntity {
     private Long id;
+    private Long noticeId;
+    private Integer userId;
+    private String username;
+    private String realName;
+    private String roleCode;
+    private String readStatus;
+    private LocalDateTime readTime;
+    private Boolean archived;
+    private LocalDateTime archivedAt;
+    private Boolean deleted;
+    private LocalDateTime deletedAt;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+
     private String title;
     private String type;
     private String noticeType;
@@ -20,15 +34,5 @@ public class NoticeEntity {
     private String status;
     private String publishStatus;
     private LocalDateTime publishTime;
-    private LocalDateTime withdrawnAt;
-    private LocalDateTime archivedAt;
-    private Boolean deleted;
-    private LocalDateTime deletedAt;
-    private Long createdBy;
     private String tagType;
-    private Integer recipientCount;
-    private Integer readCount;
-    private Integer unreadCount;
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
 }

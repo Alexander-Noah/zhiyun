@@ -63,6 +63,7 @@ public class ReservationsEntity {
     public String getTagType() {
         if ("已通过".equals(status)) return "success";
         if ("冲突".equals(status)) return "danger";
+        if ("加签中".equals(status)) return "primary";
         if ("已驳回".equals(status) || "已取消".equals(status)) return "info";
         return "warning";
     }

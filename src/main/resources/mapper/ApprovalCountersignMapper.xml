@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.example.backend.mapper.ApprovalCountersignMapper">
+    <sql id="CountersignColumns">
+        id,
+        business_type as businessType,
+        business_id as businessId,
+        business_title as businessTitle,
+        business_status as businessStatus,
+        assigner_id as assignerId,
+        assigner_name as assignerName,
+        assignee_id as assigneeId,
+        assignee_name as assigneeName,
+        reason,
+        status,
+        result,
+        result_remark as resultRemark,
+        handled_at as handledAt,
+        created_at as createdAt,
+        updated_at as updatedAt
+    </sql>
+
+    <insert id="insertCountersign" useGeneratedKeys="true" keyProperty="id">
+        insert into approval_countersign (
+            business_type,
+            business_id,
+            business_title,
+            business_status,
+            assigner_id,
+            assigner_name,
+            assignee_id,
+            assignee_name,
+            reason,
+            status
+        )
+        values (
+            #{businessType},
+            #{businessId},
+            #{businessTitle},
+            #{businessStatus},
+            #{assignerId},
+            #{assignerName},
+            #{assigneeId},
+            #{assigneeName},
+            #{reason},
+            coalesce(nullif(#{status}, ''), '待加签')
+        )
+    </insert>
+
+    <select id="getCountersign" resultType="org.example.backend.entity.ApprovalCountersignEntity">
+        select
+            <include refid="CountersignColumns" />
+        from approval_countersign
+        where id = #{id}
+    </select>
+
+    <select id="listCountersigns" resultType="org.example.backend.entity.ApprovalCountersignEntity">
+        select
+            <include refid="CountersignColumns" />
+        from approval_countersign
+        where 1 = 1
+          <if test="businessType != null and businessType != ''">
+              and business_type = #{businessType}
+          </if>
+          <if test="businessId != null and businessId != ''">
+              and business_id = #{businessId}
+          </if>
+          <if test="assigneeName != null and assigneeName != ''">
+              and assignee_name like concat('%', #{assigneeName}, '%')
+          </if>
+          <if test="status != null and status != ''">
+              and status = #{status}
+          </if>
+        order by created_at desc, id desc
+    </select>
+
+    <update id="completeCountersign">
+        update approval_countersign
+        set status = #{status},
+            result = #{result},
+            result_remark = #{resultRemark},
+            handled_at = now(),
+            updated_at = now()
+        where id = #{id}
+          and status = '待加签'
+    </update>
+
+    <update id="cancelCountersign">
+        update approval_countersign
+        set status = '已取消',
+            result = '已取消',
+            result_remark = #{resultRemark},
+            handled_at = now(),
+            updated_at = now()
+        where id = #{id}
+          and status = '待加签'
+    </update>
+
+    <select id="countActiveByBusiness" resultType="int">
+        select count(1)
+        from approval_countersign
+        where business_type = #{businessType}
+          and business_id = #{businessId}
+          and status = '待加签'
+    </select>
+</mapper>

@@ -1,71 +1,106 @@
+# ==================================================
+# 硬件接入示例配置
+# 说明：
+# 1. 这个文件是示例，不会自动生效。
+# 2. 正式使用时，可把 smart-lab.iot.devices 配置复制到 application.yaml。
+# 3. 密码、Token 等敏感信息建议用 ${环境变量:默认值} 注入。
+# ==================================================
 smart-lab:
   iot:
+    # 是否启用硬件控制适配层。
     enabled: true
+    # 单次硬件调用超时时间。
     timeout: 5s
+    # 设备清单；每个设备至少应包含 code、name、type、lab-id、protocol。
     devices:
       - code: ACCESS-C305-01
         name: C305 前门门禁控制器
+        # 设备类型：access-control 表示门禁控制器。
         type: access-control
+        # 绑定的实验室 ID，用于页面按实验室加载设备。
         lab-id: 1
+        # 调用协议：http 表示通过 HTTP 接口控制。
         protocol: http
+        # 门禁控制器基础地址。
         base-url: http://10.10.30.21:8080
+        # 登录用户名/密码；从环境变量读取，避免写死在配置文件。
         username: ${IOT_ACCESS_C305_USER:}
         password: ${IOT_ACCESS_C305_PASSWORD:}
+        # 门禁设备支持的业务指令集合。
         commands:
           open:
+            # 远程开门指令。
             method: POST
             path: /api/door/open
+            # ${door}、${labId} 等占位符会由后端运行时替换。
             body: '{"door":"${door}","labId":"${labId}"}'
+            # 响应内容包含该字符串时视为调用成功。
             success-contains: success
           lock:
+            # 远程锁定指令。
             method: POST
             path: /api/door/lock
             body: '{"door":"${door}","labId":"${labId}"}'
             success-contains: success
           card-enroll:
+            # 门禁卡录入指令。
             method: POST
             path: /api/access/cards/enroll
             body: '{"door":"${door}","labId":"${labId}","cardNo":"${cardNo}","operator":"${operator}"}'
             success-contains: success
           student-enroll:
+            # 学号/学生身份录入指令。
             method: POST
             path: /api/access/students/enroll
             body: '{"door":"${door}","labId":"${labId}","studentNo":"${studentNo}","allowStudentCard":${allowStudentCard},"allowCampusCode":${allowCampusCode},"openMethods":"${openMethods}","operator":"${operator}"}'
             success-contains: success
           face-enroll:
+            # 人脸录入指令。
             method: POST
             path: /api/access/faces/enroll
             body: '{"door":"${door}","labId":"${labId}","personNo":"${personNo}","operator":"${operator}"}'
             success-contains: success
           fingerprint-enroll:
+            # 指纹录入指令。
             method: POST
             path: /api/access/fingerprints/enroll
             body: '{"door":"${door}","labId":"${labId}","personNo":"${personNo}","operator":"${operator}"}'
             success-contains: success
           status:
+            # 门禁状态查询指令。
             method: GET
             path: /api/door/status
       - code: CAMERA-C305-01
         name: C305 实验室摄像头
+        # 设备类型：camera 表示摄像头。
         type: camera
         lab-id: 1
         protocol: http
         username: ${IOT_CAMERA_C305_USER:}
         password: ${IOT_CAMERA_C305_PASSWORD:}
+        # 摄像头抓拍图片地址。
         snapshot-url: http://10.10.30.31/ISAPI/Streaming/channels/101/picture
+        # 摄像头 HLS 直播流地址，前端可用于监控查看。
         hls-url: http://10.10.30.10/live/c305/index.m3u8
       - code: RELAY-C305-LIGHT
         name: C305 照明继电器
+        # 设备类型：light 表示灯光控制设备。
         type: light
         lab-id: 1
+        # 调用协议：tcp 表示通过 TCP 指令控制。
         protocol: tcp
+        # TCP 设备地址或主机名。
         base-url: 10.10.30.41
         commands:
           set:
+            # 开灯指令。
             tcp:
+              # TCP 端口。
               port: 6000
+              # 指令载荷；hex: 前缀表示十六进制数据。
               payload: "hex:A00101A2"
           off:
+            # 关灯指令。
             tcp:
               port: 6000
               payload: "hex:A00100A1"

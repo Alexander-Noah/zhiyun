@@ -29,22 +29,22 @@ public class ConsumableController {
 
     @GetMapping
     public Result listConsumables() {
-        return Result.success("list consumables success", consumableService.listConsumables());
+        return Result.success("获取耗材列表成功", consumableService.listConsumables());
     }
 
     @PostMapping
     public Result createConsumable(@RequestBody ConsumableEntity consumable) {
-        return Result.success("create consumable success", consumableService.createConsumable(consumable));
+        return Result.success("新增耗材成功", consumableService.createConsumable(consumable));
     }
 
     @PutMapping("/{id}")
     public Result updateConsumable(@PathVariable Long id, @RequestBody ConsumableEntity consumable) {
-        return Result.success("update consumable success", consumableService.updateConsumable(id, consumable));
+        return Result.success("更新耗材成功", consumableService.updateConsumable(id, consumable));
     }
 
     @DeleteMapping("/{id}")
     public Result deleteConsumable(@PathVariable Long id) {
-        return Result.success("delete consumable success", consumableService.deleteConsumable(id));
+        return Result.success("删除耗材成功", consumableService.deleteConsumable(id));
     }
 
     @PutMapping("/batch")
@@ -53,12 +53,12 @@ public class ConsumableController {
                 ? Collections.emptyList()
                 : request.getRecords();
         log.info("replace consumables: {}", consumables.size());
-        return Result.success("replace consumables success", consumableService.replaceConsumables(consumables));
+        return Result.success("批量保存耗材成功", consumableService.replaceConsumables(consumables));
     }
 
     @PostMapping("/reset")
     public Result resetConsumables() {
-        return Result.success("reset consumables success", consumableService.resetConsumables());
+        return Result.success("重置耗材数据成功", consumableService.resetConsumables());
     }
 
     @Data

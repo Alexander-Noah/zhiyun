@@ -292,5 +292,14 @@
                 updated_at = now()
             where id = #{id}
     </update>
+    <update id="updateReviewStatus">
+        update lab_reservation
+        set
+            status = #{status},
+            reviewer_name = coalesce(nullif(#{reviewerName}, ''), reviewer_name),
+            review_remark = coalesce(nullif(#{reviewRemark}, ''), review_remark),
+            updated_at = now()
+        where id = #{id}
+    </update>
 
 </mapper>
