@@ -40,6 +40,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             "/host-status/latest",
             "/host-assets/report",
             "/host-assets",
+            "/activation-codes/verify",
+            "/admin/activation-codes/verify",
 
             // Springdoc / Swagger
             "/v3/api-docs",

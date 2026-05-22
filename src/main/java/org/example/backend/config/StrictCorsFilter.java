@@ -25,7 +25,7 @@ public class StrictCorsFilter extends OncePerRequestFilter {
 
     public StrictCorsFilter(
             @Value("${smart-lab.security.cors.allowed-origins:}") String allowedOrigins,
-            @Value("${smart-lab.security.cors.allowed-origin-patterns:http://localhost:*,http://127.0.0.1:*,http://10.*.*.*:*,http://172.*.*.*:*,http://192.168.*.*:*}") String allowedOriginPatterns
+            @Value("${smart-lab.security.cors.allowed-origin-patterns:http://localhost:*,http://127.0.0.1:*,http://10.*.*.*:*,http://172.*.*.*:*,http://192.168.*.*:*,tauri://localhost,http://tauri.localhost}") String allowedOriginPatterns
     ) {
         this.corsConfiguration = new CorsConfiguration();
         this.corsConfiguration.setAllowedOrigins(splitCsv(allowedOrigins));
