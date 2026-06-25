@@ -20,7 +20,7 @@ public class DatabaseSchemaInitializer implements ApplicationRunner {
         ensureNoticeRecipientTable();
         ensureApprovalCountersignTable();
         ensureAiAssistantConversationTable();
-        ensureHostStaticAssetTable();
+        ensureAiAssistantUserConfigTable();
     }
 
     private void ensureUserAvatarColumn() {
@@ -161,28 +161,21 @@ public class DatabaseSchemaInitializer implements ApplicationRunner {
                 """);
     }
 
-    private void ensureHostStaticAssetTable() {
+    private void ensureAiAssistantUserConfigTable() {
         jdbcTemplate.execute("""
-                create table if not exists host_static_asset (
-                  id bigint primary key auto_increment comment '主键',
-                  hostname varchar(120) not null comment '主机名',
-                  platform varchar(300) default null comment '系统平台',
-                  system_name varchar(80) default null comment '系统名称',
-                  release_version varchar(80) default null comment '系统版本',
-                  architecture varchar(80) default null comment 'CPU架构',
-                  python_version varchar(80) default null comment 'Python版本',
-                  environment_json longtext default null comment '环境变量JSON',
-                  running_apps_json longtext default null comment '运行程序JSON',
-                  installed_software_json longtext default null comment '已安装软件JSON',
-                  running_app_count int not null default 0 comment '运行程序数量',
-                  installed_software_count int not null default 0 comment '已安装软件数量',
-                  reported_at varchar(80) default null comment '探针上报时间',
-                  received_at datetime not null default current_timestamp comment '后端接收时间',
-                  created_at datetime not null default current_timestamp comment '创建时间',
-                  updated_at datetime not null default current_timestamp on update current_timestamp comment '更新时间',
-                  unique key uk_host_static_asset_hostname (hostname),
-                  key idx_host_static_asset_updated_at (updated_at)
-                ) comment '主机静态资产快照'
+                create table if not exists ai_assistant_user_config (
+                  id bigint primary key auto_increment comment 'primary key',
+                  user_id int not null comment 'user id',
+                  enabled tinyint(1) not null default 0 comment 'custom api enabled',
+                  base_url varchar(500) not null comment 'openai compatible base url',
+                  api_key varchar(1000) default null comment 'api key',
+                  model varchar(120) not null comment 'text model',
+                  vision_model varchar(120) default null comment 'vision model',
+                  system_prompt varchar(1000) default null comment 'system prompt',
+                  created_at datetime not null default current_timestamp comment 'created at',
+                  updated_at datetime not null default current_timestamp on update current_timestamp comment 'updated at',
+                  unique key uk_ai_user_config_user (user_id)
+                ) comment 'ai assistant user config'
                 """);
     }
 }

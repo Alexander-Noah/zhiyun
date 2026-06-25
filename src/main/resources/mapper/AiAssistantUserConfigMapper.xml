@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.example.backend.mapper.AiAssistantUserConfigMapper">
+    <sql id="ConfigColumns">
+        id,
+        user_id as userId,
+        enabled,
+        base_url as baseUrl,
+        api_key as apiKey,
+        model,
+        vision_model as visionModel,
+        system_prompt as systemPrompt,
+        created_at as createdAt,
+        updated_at as updatedAt
+    </sql>
+
+    <select id="getByUserId" resultType="org.example.backend.entity.AiAssistantUserConfigEntity">
+        select
+            <include refid="ConfigColumns" />
+        from ai_assistant_user_config
+        where user_id = #{userId}
+        limit 1
+    </select>
+
+    <insert id="upsertConfig">
+        insert into ai_assistant_user_config (
+            user_id,
+            enabled,
+            base_url,
+            api_key,
+            model,
+            vision_model,
+            system_prompt
+        )
+        values (
+            #{userId},
+            #{enabled},
+            #{baseUrl},
+            #{apiKey},
+            #{model},
+            #{visionModel},
+            #{systemPrompt}
+        )
+        on duplicate key update
+            enabled = values(enabled),
+            base_url = values(base_url),
+            api_key = values(api_key),
+            model = values(model),
+            vision_model = values(vision_model),
+            system_prompt = values(system_prompt),
+            updated_at = now()
+    </insert>
+</mapper>

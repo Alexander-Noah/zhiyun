@@ -21,6 +21,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.LocalDate;
@@ -186,7 +187,7 @@ public class ClassTimetableServiceImpl implements ClassTimetableService {
             throw new IllegalArgumentException("请先在课表抓取页面保存教务系统账号和密码");
         }
 
-        String python = environment.getProperty("timetable.crawler.python", "python");
+        String python = resolvePythonExecutable();
         String scriptPathText = environment.getProperty("timetable.crawler.script-path", "Python/crawl_school_timetable.py");
         String importScriptPathText = environment.getProperty("timetable.crawler.import-script-path", "Python/parse_and_import_timetable.py");
         String workingDirText = environment.getProperty("timetable.crawler.working-dir", "Python");
@@ -724,6 +725,15 @@ public class ClassTimetableServiceImpl implements ClassTimetableService {
             boolean appendLog,
             Map<String, String> extraEnv
     ) throws IOException, InterruptedException {
+        Files.writeString(
+                logPath,
+                "Python executable: " + python + System.lineSeparator()
+                        + "Script path: " + scriptPath + System.lineSeparator()
+                        + "Working dir: " + workingDir + System.lineSeparator(),
+                StandardCharsets.UTF_8,
+                appendLog ? StandardOpenOption.APPEND : StandardOpenOption.CREATE,
+                StandardOpenOption.WRITE
+        );
         ProcessBuilder processBuilder = new ProcessBuilder(python, scriptPath.toString());
         processBuilder.directory(workingDir.toFile());
         processBuilder.environment().put("PYTHONIOENCODING", "utf-8");
@@ -733,7 +743,7 @@ public class ClassTimetableServiceImpl implements ClassTimetableService {
         if (appendLog) {
             processBuilder.redirectOutput(ProcessBuilder.Redirect.appendTo(logPath.toFile()));
         } else {
-            processBuilder.redirectOutput(logPath.toFile());
+            processBuilder.redirectOutput(ProcessBuilder.Redirect.appendTo(logPath.toFile()));
         }
 
         Process process = processBuilder.start();
@@ -743,6 +753,27 @@ public class ClassTimetableServiceImpl implements ClassTimetableService {
             return -1;
         }
         return process.exitValue();
+    }
+
+    private String resolvePythonExecutable() {
+        String configuredPython = environment.getProperty("timetable.crawler.python", "").trim();
+        if (!configuredPython.isEmpty()) {
+            return configuredPython;
+        }
+
+        List<Path> candidates = List.of(
+                Path.of("Python/.venv/Scripts/python.exe"),
+                Path.of("../Python/.venv/Scripts/python.exe"),
+                Path.of("Python/.venv/bin/python"),
+                Path.of("../Python/.venv/bin/python")
+        );
+        for (Path candidate : candidates) {
+            Path pythonPath = candidate.toAbsolutePath().normalize();
+            if (Files.exists(pythonPath)) {
+                return pythonPath.toString();
+            }
+        }
+        return "python";
     }
 
     private Path resolveConfiguredScriptPath(String scriptPathText) {

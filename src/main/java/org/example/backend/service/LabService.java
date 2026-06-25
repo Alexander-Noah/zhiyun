@@ -7,6 +7,8 @@ import java.util.List;
 public interface LabService {
     List<LabEntity> getLabs();
 
+    List<LabEntity> getLabs(Integer managerUserId);
+
     LabEntity addLab(LabEntity lab);
 
     Object getLabById(Integer id);

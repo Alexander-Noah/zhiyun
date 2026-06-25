@@ -25,6 +25,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Result> handleDataIntegrityViolationException(DataIntegrityViolationException exception, HttpServletRequest request) {
+        String message = "DELETE".equalsIgnoreCase(request.getMethod())
+                ? "当前数据已被其他业务引用，请先解除关联后再删除"
+                : "数据格式或约束不符合要求，请检查后重试";
+
         log.warn("data integrity violation method={} uri={} requestId={} message={}",
                 request.getMethod(),
                 request.getRequestURI(),
@@ -32,7 +36,7 @@ public class GlobalExceptionHandler {
                 exception.getMostSpecificCause().getMessage());
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
-                .body(Result.error("当前数据已被其他业务引用，请先解除关联后再删除"));
+                .body(Result.error(message));
     }
 
     @ExceptionHandler(Exception.class)

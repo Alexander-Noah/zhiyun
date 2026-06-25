@@ -27,6 +27,15 @@ public class LabServiceImpl implements LabService {
     }
 
     @Override
+    public List<LabEntity> getLabs(Integer managerUserId) {
+        if (managerUserId == null) {
+            return getLabs();
+        }
+        List<LabEntity> labs = labMapper.getLabsByManagerUserId(managerUserId);
+        return labs == null ? List.of() : labs;
+    }
+
+    @Override
     public LabEntity addLab(LabEntity lab) {
         if (lab.getOpenStatus() == null || lab.getOpenStatus().isBlank()) {
             lab.setOpenStatus("开放");

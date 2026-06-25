@@ -36,10 +36,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             "/error",
             "/favicon.ico",
             "/actuator/health",
-            "/host-status/report",
-            "/host-status/latest",
-            "/host-assets/report",
-            "/host-assets",
             "/activation-codes/verify",
             "/admin/activation-codes/verify",
 
@@ -57,7 +53,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String[] PUBLIC_PREFIXES = {
             "/files/avatar-proxy",
             "/public/",
-            "/host-assets/",
             "/v3/api-docs/",
             "/swagger-ui/",
             "/webjars/"

@@ -1,0 +1,6 @@
+beautifulsoup4
+pandas
+selenium
+pymysql
+openpyxl
+psutil

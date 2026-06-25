@@ -65,7 +65,7 @@ speech:
 timetable:
   crawler:
     # 执行 Python 脚本的命令或解释器路径。
-    python: ${TIMETABLE_CRAWLER_PYTHON:python}
+    python: ${TIMETABLE_CRAWLER_PYTHON:}
     # 课表抓取脚本路径。
     script-path: ${TIMETABLE_CRAWLER_SCRIPT:Python/crawl_school_timetable.py}
     # 抓取结果解析入库脚本路径。

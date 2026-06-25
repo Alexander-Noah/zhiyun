@@ -1,10 +1,12 @@
 package org.example.backend.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
-import org.example.backend.result.Result;
 import org.example.backend.entity.LabEntity;
-import org.example.backend.service.LabService;
+import org.example.backend.result.Result;
+import org.example.backend.security.JwtAuthenticationFilter;
 import org.example.backend.service.DevicesService;
+import org.example.backend.service.LabService;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Collections;
@@ -23,12 +25,10 @@ public class LabController {
     }
 
     @GetMapping("/labs")
-    public Result getLabs() {
-        List<LabEntity> labs = labService.getLabs();
-        log.info("查询实验室列表，返回 {} 条记录", labs == null ? 0 : labs.size());
-        if (labs != null && !labs.isEmpty()) {
-            log.info("第一条实验室数据：{}", labs.get(0));
-        }
+    public Result getLabs(HttpServletRequest request) {
+        Integer managerUserId = resolveScopedManagerId(request);
+        List<LabEntity> labs = labService.getLabs(managerUserId);
+        log.info("查询实验室列表，负责人范围 {}，返回 {} 条记录", managerUserId, labs == null ? 0 : labs.size());
         return Result.success("查询实验室列表成功", labs);
     }
 
@@ -40,7 +40,6 @@ public class LabController {
     @GetMapping("/labs/{id:\\d+}/devices")
     public Result getLabDevices(@PathVariable Integer id) {
         log.info("查询实验室设备列表，实验室ID：{}", id);
-        System.out.println("执行到这了");
         return Result.success("查询实验室设备成功", deviceService.getDevicesByLabId(id));
     }
 
@@ -70,8 +69,26 @@ public class LabController {
     }
 
     @PostMapping("/labs/reset")
-    public Result resetLabs() {
-        return Result.success("重置实验室成功", labService.getLabs());
+    public Result resetLabs(HttpServletRequest request) {
+        return Result.success("重置实验室成功", labService.getLabs(resolveScopedManagerId(request)));
+    }
+
+    private Integer resolveScopedManagerId(HttpServletRequest request) {
+        Object role = request.getAttribute(JwtAuthenticationFilter.AUTH_ROLE_ATTRIBUTE);
+        if ("systemAdmin".equals(String.valueOf(role))) {
+            return null;
+        }
+
+        Object rawUserId = request.getAttribute(JwtAuthenticationFilter.AUTH_USER_ID_ATTRIBUTE);
+        if (rawUserId == null) {
+            return null;
+        }
+
+        try {
+            return Integer.valueOf(String.valueOf(rawUserId));
+        } catch (NumberFormatException exception) {
+            return null;
+        }
     }
 
     public static class LabBatchRequest {
