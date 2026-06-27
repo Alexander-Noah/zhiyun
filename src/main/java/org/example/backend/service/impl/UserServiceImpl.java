@@ -65,7 +65,7 @@ public class UserServiceImpl implements UserService {
     public UserEntity updateUser(Integer id, UserEntity user) {
         UserEntity existingUser = userMapper.getUser(id);
         if (existingUser == null) {
-            throw new IllegalArgumentException("user not found");
+            throw new IllegalArgumentException("未知用户");
         }
         boolean hasNewPassword = user.getPassword() != null && !user.getPassword().isBlank();
         if (user.getUsername() == null || user.getUsername().isBlank()) {
@@ -89,7 +89,7 @@ public class UserServiceImpl implements UserService {
         }
         int updatedCount = userMapper.updateUser(id, user);
         if (updatedCount == 0) {
-            throw new IllegalArgumentException("user not found");
+            throw new IllegalArgumentException("未知用户");
         }
         saveRole(id, user.getRoleCode());
         UserEntity savedUser = userMapper.getUser(id);
@@ -101,7 +101,7 @@ public class UserServiceImpl implements UserService {
     public UserEntity updateUserStatus(Integer id, Integer status) {
         int updatedCount = userMapper.updateUserStatus(id, status == null ? 1 : status);
         if (updatedCount == 0) {
-            throw new IllegalArgumentException("user not found");
+            throw new IllegalArgumentException("未知用户");
         }
         UserEntity savedUser = userMapper.getUser(id);
         recordUserEvent(Integer.valueOf(1).equals(savedUser.getStatus()) ? "enable" : "disable", savedUser);

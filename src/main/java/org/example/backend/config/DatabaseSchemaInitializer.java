@@ -16,11 +16,59 @@ public class DatabaseSchemaInitializer implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         ensureUserAvatarColumn();
+        ensureDeviceAssetColumns();
         ensureNoticeColumns();
         ensureNoticeRecipientTable();
         ensureApprovalCountersignTable();
         ensureAiAssistantConversationTable();
         ensureAiAssistantUserConfigTable();
+    }
+
+    private void ensureDeviceAssetColumns() {
+        addDeviceColumnIfMissing("lab_name", """
+                alter table device
+                  add column lab_name varchar(100) default null comment '所属实验室' after lab_id
+                """);
+        addDeviceColumnIfMissing("quantity", """
+                alter table device
+                  add column quantity int not null default 1 comment '数量' after owner_user_id
+                """);
+        addDeviceColumnIfMissing("unit", """
+                alter table device
+                  add column unit varchar(20) not null default '台' comment '单位' after quantity
+                """);
+        addDeviceColumnIfMissing("standard_requirement", """
+                alter table device
+                  add column standard_requirement text default null comment '执行标准和数量要求' after specs
+                """);
+        addDeviceColumnIfMissing("remark", """
+                alter table device
+                  add column remark text default null comment '备注' after standard_requirement
+                """);
+        addDeviceColumnIfMissing("source_type", """
+                alter table device
+                  add column source_type varchar(20) not null default '手动录入' comment '数据来源' after remark
+                """);
+        addDeviceColumnIfMissing("deleted", """
+                alter table device
+                  add column deleted tinyint(1) not null default 0 comment '逻辑删除：0未删除，1已删除' after updated_at
+                """);
+    }
+
+    private void addDeviceColumnIfMissing(String columnName, String ddl) {
+        Integer count = jdbcTemplate.queryForObject("""
+                select count(*)
+                from information_schema.columns
+                where table_schema = database()
+                  and table_name = 'device'
+                  and column_name = ?
+                """, Integer.class, columnName);
+
+        if (count != null && count > 0) {
+            return;
+        }
+
+        jdbcTemplate.execute(ddl);
     }
 
     private void ensureUserAvatarColumn() {

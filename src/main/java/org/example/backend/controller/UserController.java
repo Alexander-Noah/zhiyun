@@ -33,7 +33,7 @@ public class UserController {
         UserEntity user = userService.login(username, password);
         if (user == null) {
             loginAttemptLimiter.recordFailure(username, request);
-            return Result.error("\u7528\u6237\u540d\u6216\u5bc6\u7801\u9519\u8bef");
+            return Result.error("用户名或密码错误");
         }
 
         loginAttemptLimiter.recordSuccess(username, request);
@@ -60,18 +60,18 @@ public class UserController {
         String targetUsername = username == null || username.isBlank() ? authUsername : username;
 
         if (targetUsername == null || targetUsername.isBlank()) {
-            return Result.error(401, "\u767b\u5f55\u72b6\u6001\u65e0\u6548");
+            return Result.error(401, "登入状态无效");
         }
 
         if (authUsername != null && !authUsername.equals(targetUsername) && !"systemAdmin".equals(authRole)) {
-            return Result.error(403, "\u65e0\u6743\u67e5\u770b\u5176\u4ed6\u8d26\u53f7\u8d44\u6599");
+            return Result.error(403, "无权查看其他账号资料");
         }
 
         UserEntity user = userService.profile(targetUsername);
         if (user != null) {
         return Result.success("获取个人资料成功", sanitizeUser(user));
         }
-        return Result.error("\u7528\u6237\u4e0d\u5b58\u5728");
+        return Result.error("用户不存在");
     }
 
     @GetMapping({"/users", "/admin/users"})

@@ -22,6 +22,18 @@ public class UsageRecordEntity {
     private String remark;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String recordNo;
+    private String role;
+    private String type;
+    private String lab;
+    private String leaveTime;
+    private String duration;
+    private String accessResult;
+    private String reviewer;
+    private String abnormalReason;
+    private String note;
+    private String sourceType;
+    private Boolean readonly;
 
     public String getTime() {
         return useTime == null ? "" : useTime.format(TIME_FORMATTER);

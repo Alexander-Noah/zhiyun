@@ -1,4 +1,21 @@
-# 智云实验室后端项目说明
+# 智云实验室后端项目
+
+## 项目简介
+
+智云实验室后端服务，基于Spring Boot + MyBatis构建的实验室协同管控平台后端API服务。
+
+## 技术栈
+
+- **框架**: Spring Boot 3.x
+- **ORM**: MyBatis
+- **数据库**: MySQL 8.0+
+- **认证**: JWT Token
+- **API文档**: SpringDoc (Swagger)
+- **日志**: Logback
+- **AI集成**: 通义千问Agent
+- **语音识别**: Vosk
+- **构建工具**: Maven 3.8+
+- **JDK版本**: Java 17说明
 
 这份文档写给后续维护和二次开发使用。重点说明后端代码怎么分层、接口在哪里、Mapper 怎么写、数据库字段怎么对应、前后端联调时怎么排错。
 前端仓库：https://gitee.com/translator-of-zheng-haotao/zhiyun-laboratory
@@ -1434,3 +1451,465 @@ git status --short
 - 本地数据库账号密码
 - IDE 临时文件
 - 与本次需求无关的大量格式化改动
+
+
+## 快速开始
+
+### 前置要求
+
+- JDK 17+
+- Maven 3.8+
+- MySQL 8.0+
+- (可选) Python 3.8+ (用于课表爬虫)
+- (可选) Vosk语音识别模型
+
+### 启动步骤
+
+1. **创建数据库**
+```sql
+CREATE DATABASE smart_lab_basic CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+2. **配置数据库连接**
+
+编辑 `src/main/resources/application.yaml`:
+```yaml
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/smart_lab_basic
+    username: root
+    password: your_password
+```
+
+3. **启动项目**
+```bash
+# 使用Maven
+mvn spring-boot:run
+
+# 或者打包后运行
+mvn clean package
+java -jar target/backend-0.0.1-SNAPSHOT.jar
+```
+
+4. **访问API文档**
+
+启动后访问: http://localhost:8080/swagger-ui.html
+
+## 项目结构
+
+```
+Backend/
+├── src/main/java/org/example/backend/
+│   ├── BackendApplication.java          # 启动类
+│   ├── config/                          # 配置类
+│   │   ├── SwaggerConfig.java           # API文档配置
+│   │   ├── GlobalExceptionHandler.java  # 全局异常处理
+│   │   ├── RequestLoggingFilter.java    # 请求日志
+│   │   └── ...
+│   ├── controller/                      # 控制器层（API入口）
+│   │   ├── LabController.java           # 实验室管理API
+│   │   ├── DevicesController.java       # 设备管理API
+│   │   ├── ReservationsController.java  # 预约管理API
+│   │   ├── RepairController.java        # 报修管理API
+│   │   └── ...
+│   ├── entity/                          # 实体类（数据模型）
+│   │   ├── LabEntity.java
+│   │   ├── DevicesEntity.java
+│   │   └── ...
+│   ├── mapper/                          # MyBatis Mapper接口
+│   │   ├── LabMapper.java
+│   │   ├── DevicesMapper.java
+│   │   └── ...
+│   ├── service/                         # 服务层接口
+│   │   ├── LabService.java
+│   │   └── ...
+│   ├── service/impl/                    # 服务层实现
+│   │   ├── LabServiceImpl.java
+│   │   └── ...
+│   ├── security/                        # 安全相关
+│   │   ├── JwtService.java              # JWT处理
+│   │   ├── JwtAuthenticationFilter.java # JWT过滤器
+│   │   └── PasswordService.java         # 密码加密
+│   ├── websocket/                       # WebSocket处理
+│   │   └── AiAssistantWebSocketHandler.java
+│   └── result/                          # 统一响应封装
+│       └── Result.java
+├── src/main/resources/
+│   ├── application.yaml                 # 主配置文件
+│   ├── logback-spring.xml               # 日志配置
+│   └── mapper/                          # MyBatis XML映射文件
+│       ├── LabMapper.xml
+│       ├── DevicesMapper.xml
+│       └── ...
+├── logs/                                # 日志目录
+├── data/                                # 数据文件
+└── pom.xml                              # Maven依赖配置
+```
+
+## 核心模块说明
+
+### 1. 实验室管理 (Lab)
+- **API**: `/labs`
+- **功能**: 实验室信息管理、开放状态、容量管理
+- **Controller**: `LabController.java`
+- **Service**: `LabServiceImpl.java`
+- **Entity**: `LabEntity.java`
+
+### 2. 设备资产 (Device)
+- **API**: `/devices`
+- **功能**: 设备台账、状态监控、盘点、调拨、维护记录
+- **Controller**: `DevicesController.java`
+- **Service**: `DevicesServiceImpl.java`
+- **Entity**: `DevicesEntity.java`
+
+### 3. 预约管理 (Reservation)
+- **API**: `/lab-reservations`
+- **功能**: 实验室预约、审批、时间冲突检测
+- **Controller**: `ReservationsController.java`
+- **Service**: `ReservationsServiceImpl.java`
+- **Entity**: `ReservationsEntity.java`
+
+### 4. 报修管理 (Repair)
+- **API**: `/repair-orders`
+- **功能**: 故障报修、工单分配、维修记录
+- **Controller**: `RepairController.java`
+- **Service**: `RepairServiceImpl.java`
+- **Entity**: `RepairEntity.java`
+
+### 5. 耗材管理 (Consumable)
+- **API**: `/consumables`
+- **功能**: 耗材库存、领用记录、低库存预警
+- **Controller**: `ConsumableController.java`
+- **Service**: `ConsumableServiceImpl.java`
+- **Entity**: `ConsumableEntity.java`
+
+### 6. 使用记录 (Usage Record)
+- **API**: `/usage-records`
+- **功能**: 实验室使用记录、时长统计
+- **Controller**: `UsageRecordController.java`
+- **Service**: `UsageRecordServiceImpl.java`
+- **Entity**: `UsageRecordEntity.java`
+
+### 7. 环境管理 (Environment)
+- **API**: `/lab-software`, `/course-environments`, `/environment-templates`
+- **功能**: 软件环境、课程环境需求、环境模板
+- **Controller**: `softwareController.java`, `CourseEnvironmentController.java`, `EnvironmentTemplateController.java`
+
+### 8. 课表管理 (Timetable)
+- **API**: `/class-timetable`, `/academic-schedule`
+- **功能**: 课表管理、教务系统集成、课表爬取
+- **Controller**: `ClassTimetableController.java`, `AcademicScheduleController.java`
+
+### 9. 调课管理 (Schedule Adjustment)
+- **API**: `/schedule-adjustments`
+- **功能**: 调课申请、审批流程
+- **Controller**: `ScheduleAdjustmentController.java`
+
+### 10. 通知公告 (Notice)
+- **API**: `/notices`
+- **功能**: 系统通知、公告发布
+- **Controller**: `NoticeController.java`
+
+### 11. IoT硬件 (IoT Hardware)
+- **API**: `/iot-hardware`
+- **功能**: 物联网设备管理、状态监控
+- **Controller**: `IotHardwareController.java`
+
+### 12. AI助手 (AI Assistant)
+- **API**: `/ai-assistant`, WebSocket `/ws/ai-assistant`
+- **功能**: 智能对话、语音识别、语义理解
+- **Controller**: `AiAssistantConfigController.java`
+- **WebSocket**: `AiAssistantWebSocketHandler.java`
+
+### 13. 统计分析 (Dashboard)
+- **API**: `/dashboard`, `/business-loop-report`
+- **功能**: 数据统计、可视化报表
+- **Controller**: `DashboardController.java`, `BusinessLoopReportController.java`
+
+### 14. 用户权限 (User & Auth)
+- **API**: `/admin/users`, `/auth`
+- **功能**: 用户管理、角色权限、登录认证
+- **Controller**: `UserController.java`
+
+### 15. 系统设置 (System Settings)
+- **API**: `/system-settings`
+- **功能**: 系统参数配置
+- **Controller**: `SystemSettingsController.java`
+
+## 配置说明
+
+### application.yaml 核心配置
+
+```yaml
+server:
+  port: 8080                           # 服务端口
+
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/smart_lab_basic
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+mybatis:
+  mapper-locations: classpath*:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+# JWT配置
+smart-lab:
+  security:
+    jwt:
+      enabled: true
+      secret: ${SMART_LAB_JWT_SECRET:smart-lab-dev-jwt-secret-change-in-production-2026}
+      expiration-seconds: 7200         # Token有效期2小时
+
+# AI配置
+tongyi:
+  agent:
+    enabled: true
+    base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    model: qwen-plus
+    api-key: your-api-key              # 通义千问API Key
+
+# 语音识别配置
+speech:
+  vosk:
+    model-path: ${VOSK_MODEL_PATH:../vosk-model-small-cn-0.22/vosk-model-small-cn-0.22}
+
+# 课表爬虫配置
+timetable:
+  crawler:
+    python: ${TIMETABLE_CRAWLER_PYTHON:python}
+    script-path: ${TIMETABLE_CRAWLER_SCRIPT:../Python/crawl_school_timetable.py}
+    working-dir: ${TIMETABLE_CRAWLER_WORKDIR:../Python}
+```
+
+### 环境变量配置
+
+可通过环境变量覆盖默认配置：
+
+- `SMART_LAB_JWT_SECRET`: JWT密钥
+- `VOSK_MODEL_PATH`: Vosk模型路径
+- `TIMETABLE_CRAWLER_PYTHON`: Python解释器路径
+- `TIMETABLE_CRAWLER_SCRIPT`: 课表爬虫脚本路径
+
+## API规范
+
+### 统一响应格式
+
+```json
+{
+  "code": 200,
+  "message": "操作成功",
+  "data": {}
+}
+```
+
+### 错误响应
+
+```json
+{
+  "code": -1,
+  "message": "错误描述",
+  "data": {}
+}
+```
+
+### 认证机制
+
+使用JWT Token认证，请求头需携带：
+
+```
+Authorization: Bearer <your-token>
+```
+
+获取Token：
+
+```bash
+POST /auth/login
+{
+  "username": "admin",
+  "password": "password"
+}
+```
+
+## 数据库表设计
+
+### 核心表
+
+| 表名 | 说明 |
+|------|------|
+| `lab` | 实验室信息表 |
+| `device` | 设备资产表 |
+| `lab_reservation` | 预约记录表 |
+| `repair_order` | 报修工单表 |
+| `consumable` | 耗材表 |
+| `usage_record` | 使用记录表 |
+| `sys_user` | 用户表 |
+| `notice` | 通知公告表 |
+| `class_timetable` | 课表表 |
+| `course_environment_request` | 课程环境需求表 |
+| `environment_template` | 环境模板表 |
+| `lab_software` | 软件环境表 |
+| `schedule_adjustment` | 调课申请表 |
+| `device_inventory_record` | 设备盘点记录表 |
+| `device_transfer_record` | 设备调拨记录表 |
+
+## 开发指南
+
+### 添加新接口
+
+1. **创建Entity**
+```java
+@Data
+public class XxxEntity {
+    private Integer id;
+    private String name;
+    // ...
+}
+```
+
+2. **创建Mapper接口**
+```java
+@Mapper
+public interface XxxMapper {
+    @Select("SELECT * FROM xxx WHERE id = #{id}")
+    XxxEntity selectById(Integer id);
+}
+```
+
+3. **创建Service**
+```java
+public interface XxxService {
+    XxxEntity getById(Integer id);
+}
+
+@Service
+public class XxxServiceImpl implements XxxService {
+    @Autowired
+    private XxxMapper xxxMapper;
+    
+    @Override
+    public XxxEntity getById(Integer id) {
+        return xxxMapper.selectById(id);
+    }
+}
+```
+
+4. **创建Controller**
+```java
+@RestController
+@CrossOrigin
+public class XxxController {
+    @Autowired
+    private XxxService xxxService;
+    
+    @GetMapping("/xxx/{id}")
+    public Result getById(@PathVariable Integer id) {
+        return Result.success("查询成功", xxxService.getById(id));
+    }
+}
+```
+
+### 日志使用
+
+```java
+@Slf4j
+@RestController
+public class XxxController {
+    @GetMapping("/xxx")
+    public Result list() {
+        log.info("查询列表");
+        // ...
+        log.error("查询失败", e);
+    }
+}
+```
+
+### 异常处理
+
+全局异常由 `GlobalExceptionHandler` 统一处理，无需在Controller中捕获。
+
+## 测试
+
+### 运行测试
+
+```bash
+mvn test
+```
+
+### API测试
+
+推荐使用Postman或在Swagger UI中测试：
+http://localhost:8080/swagger-ui.html
+
+## 部署
+
+### 打包
+
+```bash
+mvn clean package
+```
+
+### 运行
+
+```bash
+java -jar target/backend-0.0.1-SNAPSHOT.jar
+```
+
+### 后台运行
+
+```bash
+nohup java -jar target/backend-0.0.1-SNAPSHOT.jar > logs/app.log 2>&1 &
+```
+
+### 停止服务
+
+```bash
+# 查找进程
+ps -ef | grep backend
+
+# 杀死进程
+kill -9 <pid>
+
+# 或使用脚本
+pkill -f backend-0.0.1-SNAPSHOT.jar
+```
+
+## 日志
+
+日志文件位置：`logs/backend.log`
+
+日志级别配置在 `logback-spring.xml`
+
+## 常见问题
+
+### Q: 启动失败，数据库连接超时？
+A: 检查MySQL是否启动，配置的数据库是否存在。
+
+### Q: JWT Token验证失败？
+A: 检查Token是否过期，请求头是否正确携带Authorization。
+
+### Q: MyBatis映射异常？
+A: 检查XML文件路径配置，SQL语句是否正确。
+
+### Q: 课表爬虫失败？
+A: 检查Python环境，教务系统凭证是否正确配置。
+
+### Q: AI助手无响应？
+A: 检查通义千问API Key配置，网络是否可访问API地址。
+
+## Git仓库
+
+- **远程仓库**: https://github.com/Alexander-Noah/zhiyun.git
+- **分支**: master
+
+## 许可证
+
+本项目仅供学习和研究使用。
+
+---
+
+**更新日期**: 2026-06-27
+**版本**: v1.0.0

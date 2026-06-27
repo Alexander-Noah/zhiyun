@@ -5,10 +5,31 @@ import org.apache.ibatis.annotations.Param;
 import org.example.backend.entity.DevicesEntity;
 
 import java.util.List;
+import java.util.Map;
 
 @Mapper
 public interface DevicesMapper {
     List<DevicesEntity> getDevices();
+
+    List<DevicesEntity> pageDevices(
+            @Param("offset") int offset,
+            @Param("pageSize") int pageSize,
+            @Param("keyword") String keyword,
+            @Param("labId") Long labId,
+            @Param("labName") String labName,
+            @Param("category") String category,
+            @Param("status") String status
+    );
+
+    long countDevices(
+            @Param("keyword") String keyword,
+            @Param("labId") Long labId,
+            @Param("labName") String labName,
+            @Param("category") String category,
+            @Param("status") String status
+    );
+
+    Map<String, Object> getDeviceStats();
 
     void InserterDevices(DevicesEntity devicesEntity);
 
@@ -41,5 +62,5 @@ public interface DevicesMapper {
 
     void deleteDevices(@Param("id") Long id);
 
-    List<DevicesEntity> getDevicesByLabId(Integer labId);
+    List<DevicesEntity> getDevicesByLabId(@Param("labId") Integer labId);
 }

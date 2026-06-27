@@ -24,7 +24,12 @@ public class ReservationsServiceImpl implements ReservationsService {
     private static final String CRAWLER_CONFIG_KEY = "lab-admin-class-timetable";
     private static final String DEFAULT_SEMESTER_START_DATE = "2026-03-02";
     private static final String STATUS_PENDING = "待审核";
+    private static final String STATUS_APPROVED = "已通过";
+    private static final String STATUS_REJECTED = "已驳回";
+    private static final String STATUS_CANCELLED = "已取消";
+    private static final String STATUS_EXPIRED = "已过期";
     private static final String STATUS_CONFLICT = "冲突";
+    private static final String STATUS_COMPLETED = "已完成";
     private static final Set<String> ALLOWED_SCENES = Set.of("课程", "自主", "考试", "竞赛");
 
     private final ReservationsMapper reservationsMapper;
@@ -46,6 +51,7 @@ public class ReservationsServiceImpl implements ReservationsService {
 
     @Override
     public Object getReservations() {
+        refreshExpiredReservations();
         return reservationsMapper.getReservations();
     }
 
@@ -62,6 +68,7 @@ public class ReservationsServiceImpl implements ReservationsService {
 
     @Override
     public Object getReservation(Integer id) {
+        refreshExpiredReservations();
         return reservationsMapper.getReservation(id);
     }
 
@@ -73,6 +80,7 @@ public class ReservationsServiceImpl implements ReservationsService {
             throw new IllegalArgumentException("预约记录不存在");
         }
 
+        validateStatusTransitionForUpdate(previousReservation, reservation);
         normalizeReservation(id, reservation);
         int updatedCount = reservationsMapper.updateReservation(id, reservation);
         if (updatedCount == 0) {
@@ -112,6 +120,7 @@ public class ReservationsServiceImpl implements ReservationsService {
         }
         businessLoopService.recordEvent("reservation", "batch-save", "预约台账", "已同步", Map.of("count", reservations.size()));
 
+        refreshExpiredReservations();
         return reservationsMapper.getReservations();
     }
 
@@ -120,13 +129,25 @@ public class ReservationsServiceImpl implements ReservationsService {
     public ReservationsEntity getApproved(Integer id, ReservationsEntity reservationPatch) {
         normalizeTextFields(reservationPatch);
         validateOptionalMeaningfulText("审核备注", reservationPatch.getReviewRemark(), 4, 120);
+        refreshExpiredReservations();
         ReservationsEntity currentReservation = reservationsMapper.getReservation(id);
         if (currentReservation == null) {
             throw new IllegalArgumentException("预约记录不存在");
         }
+        if (STATUS_CONFLICT.equals(currentReservation.getStatus()) || Boolean.TRUE.equals(currentReservation.getConflict())) {
+            throw new IllegalArgumentException("该预约存在时间冲突，无法通过");
+        }
+        if (STATUS_EXPIRED.equals(currentReservation.getStatus())
+                || (STATUS_PENDING.equals(currentReservation.getStatus()) && isPastReservationStart(currentReservation))) {
+            expireReservation(currentReservation);
+            throw new IllegalArgumentException("该预约已过期，无法通过");
+        }
+        if (!STATUS_PENDING.equals(currentReservation.getStatus())) {
+            throw new IllegalArgumentException("只能通过待审核预约");
+        }
         List<String> availabilityIssues = collectAvailabilityIssues(id, currentReservation, true);
         if (!availabilityIssues.isEmpty()) {
-            throw new IllegalArgumentException(String.join("；", availabilityIssues));
+            throw new IllegalArgumentException("该预约存在时间冲突，无法通过");
         }
         int updatedCount = reservationsMapper.getApproved(id, reservationPatch);
         if (updatedCount == 0) {
@@ -143,6 +164,19 @@ public class ReservationsServiceImpl implements ReservationsService {
     public ReservationsEntity getRejected(Integer id, ReservationsEntity reservationPatch) {
         normalizeTextFields(reservationPatch);
         validateMeaningfulText("驳回原因", reservationPatch.getReviewRemark(), 4, 120);
+        refreshExpiredReservations();
+        ReservationsEntity currentReservation = reservationsMapper.getReservation(id);
+        if (currentReservation == null) {
+            throw new IllegalArgumentException("预约记录不存在");
+        }
+        if (STATUS_EXPIRED.equals(currentReservation.getStatus())
+                || (STATUS_PENDING.equals(currentReservation.getStatus()) && isPastReservationStart(currentReservation))) {
+            expireReservation(currentReservation);
+            throw new IllegalArgumentException("已过期预约不能驳回");
+        }
+        if (!STATUS_PENDING.equals(currentReservation.getStatus()) && !STATUS_CONFLICT.equals(currentReservation.getStatus())) {
+            throw new IllegalArgumentException("只能驳回待审核或冲突预约");
+        }
         int updatedCount = reservationsMapper.getRejected(id, reservationPatch);
         if (updatedCount == 0) {
             throw new IllegalArgumentException("预约记录不存在");
@@ -241,6 +275,9 @@ public class ReservationsServiceImpl implements ReservationsService {
         validateRequiredFields(reservation);
         resolveReservationLab(reservation);
 
+        if ("加签中".equals(reservation.getStatus())) {
+            reservation.setStatus(STATUS_PENDING);
+        }
         if (reservation.getStatus() == null || reservation.getStatus().isBlank()) {
             reservation.setStatus(STATUS_PENDING);
         }
@@ -248,7 +285,20 @@ public class ReservationsServiceImpl implements ReservationsService {
             reservation.setReviewerName(STATUS_PENDING);
         }
 
-        if ("已驳回".equals(reservation.getStatus()) || "已取消".equals(reservation.getStatus())) {
+        if (STATUS_PENDING.equals(reservation.getStatus()) && isPastReservationStart(reservation)) {
+            reservation.setStatus(STATUS_EXPIRED);
+            reservation.setConflict(false);
+            reservation.setReviewerName(firstNonBlank(reservation.getReviewerName(), "系统"));
+            if (isBlank(reservation.getReviewRemark())) {
+                reservation.setReviewRemark("预约已过期。");
+            }
+            return;
+        }
+
+        if (STATUS_REJECTED.equals(reservation.getStatus())
+                || STATUS_CANCELLED.equals(reservation.getStatus())
+                || STATUS_EXPIRED.equals(reservation.getStatus())
+                || STATUS_COMPLETED.equals(reservation.getStatus())) {
             reservation.setConflict(false);
             return;
         }
@@ -277,6 +327,91 @@ public class ReservationsServiceImpl implements ReservationsService {
         reservation.setReviewerName(STATUS_PENDING);
         if (isBlank(reservation.getReviewRemark())) {
             reservation.setReviewRemark("扫码提交，待管理员审核。");
+        }
+    }
+
+    private void refreshExpiredReservations() {
+        List<ReservationsEntity> reservations = reservationsMapper.getReservations();
+        for (ReservationsEntity reservation : reservations) {
+            if ("加签中".equals(reservation.getStatus())) {
+                reservationsMapper.updateReviewStatus(
+                        reservation.getId().intValue(),
+                        STATUS_PENDING,
+                        STATUS_PENDING,
+                        firstNonBlank(reservation.getReviewRemark(), "加签状态已取消，返回待审核")
+                );
+                reservation.setStatus(STATUS_PENDING);
+            }
+
+            if (STATUS_PENDING.equals(reservation.getStatus()) && isPastReservationStart(reservation)) {
+                expireReservation(reservation);
+            }
+        }
+    }
+
+    private void expireReservation(ReservationsEntity reservation) {
+        if (reservation == null || reservation.getId() == null || STATUS_EXPIRED.equals(reservation.getStatus())) {
+            return;
+        }
+        reservationsMapper.updateReviewStatus(
+                reservation.getId().intValue(),
+                STATUS_EXPIRED,
+                "系统",
+                "预约已过期。"
+        );
+        reservation.setStatus(STATUS_EXPIRED);
+        reservation.setReviewerName("系统");
+        reservation.setReviewRemark("预约已过期。");
+        reservation.setConflict(false);
+    }
+
+    private void validateStatusTransitionForUpdate(ReservationsEntity previousReservation, ReservationsEntity nextReservation) {
+        if (previousReservation == null || nextReservation == null) {
+            return;
+        }
+
+        String nextStatus = firstNonBlank(nextReservation.getStatus(), previousReservation.getStatus());
+        String previousStatus = "加签中".equals(previousReservation.getStatus()) ? STATUS_PENDING : previousReservation.getStatus();
+
+        if (STATUS_CANCELLED.equals(nextStatus)) {
+            if (!STATUS_PENDING.equals(previousStatus) && !STATUS_APPROVED.equals(previousStatus) && !STATUS_CONFLICT.equals(previousStatus)) {
+                throw new IllegalArgumentException("当前状态不能取消预约");
+            }
+            if (isPastReservationStart(previousReservation)) {
+                if (STATUS_PENDING.equals(previousStatus)) {
+                    expireReservation(previousReservation);
+                }
+                throw new IllegalArgumentException("当前状态不能取消预约");
+            }
+            if (isBlank(nextReservation.getReviewRemark())) {
+                throw new IllegalArgumentException("请填写取消原因");
+            }
+            return;
+        }
+
+        if (STATUS_EXPIRED.equals(previousStatus)
+                || STATUS_REJECTED.equals(previousStatus)
+                || STATUS_CANCELLED.equals(previousStatus)
+                || STATUS_COMPLETED.equals(previousStatus)) {
+            throw new IllegalArgumentException("当前状态不能编辑");
+        }
+    }
+
+    private boolean isPastReservationStart(ReservationsEntity reservation) {
+        if (reservation == null || reservation.getReservationDate() == null || isBlank(reservation.getTimeRange())) {
+            return false;
+        }
+
+        try {
+            String startTime = reservation.getTimeRange().split("-")[0].trim();
+            LocalTime start = LocalTime.parse(startTime);
+            LocalDate today = LocalDate.now();
+            if (reservation.getReservationDate().isBefore(today)) {
+                return true;
+            }
+            return reservation.getReservationDate().isEqual(today) && !LocalTime.now().isBefore(start);
+        } catch (RuntimeException exception) {
+            return false;
         }
     }
 

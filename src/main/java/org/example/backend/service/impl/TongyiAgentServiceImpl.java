@@ -75,14 +75,14 @@ public class TongyiAgentServiceImpl implements TongyiAgentService {
     @Override
     public String callAgent(String question, String sessionId, List<Map<String, Object>> images) {
         if (!isConfigured()) {
-            throw new IllegalStateException("Tongyi API key is not configured");
+            throw new IllegalStateException("通义 API Key 尚未配置");
         }
 
         List<Map<String, Object>> validImages = normalizeImages(images);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", validImages.isEmpty() ? getModel() : getVisionModel());
         body.put("messages", List.of(
-                Map.of("role", "system", "content", "你是实验室协同管控平台的企业级AI助手，回答应专业、简洁、可执行。"),
+                Map.of("role", "system", "content", "你是实验室协同管控平台的AI助手，回答应专业、简洁、可执行。"),
                 Map.of("role", "user", "content", buildUserContent(question, validImages))
         ));
         body.put("temperature", 0.7);
@@ -96,15 +96,15 @@ public class TongyiAgentServiceImpl implements TongyiAgentService {
                 .body(String.class);
 
         if (responseBody == null || responseBody.isBlank()) {
-            throw new IllegalStateException("Tongyi API returned empty response");
+            throw new IllegalStateException("通义接口返回内容为空");
         }
 
         try {
             Map<String, Object> response = objectMapper.readValue(responseBody, MAP_TYPE);
             return extractText(response);
         } catch (Exception exception) {
-            log.warn("Failed to parse Tongyi API response", exception);
-            throw new IllegalStateException("Failed to parse Tongyi API response", exception);
+            log.warn("解析通义接口响应失败", exception);
+            throw new IllegalStateException("解析通义接口响应失败", exception);
         }
     }
 
@@ -154,7 +154,7 @@ public class TongyiAgentServiceImpl implements TongyiAgentService {
                 }
             }
         }
-        throw new IllegalStateException("Tongyi API response does not contain displayable text");
+        throw new IllegalStateException("通义接口响应中没有可展示的文本内容");
     }
 
     private Map<String, Object> loadFileConfig() {
@@ -163,7 +163,7 @@ public class TongyiAgentServiceImpl implements TongyiAgentService {
                 return objectMapper.readValue(Files.readString(CONFIG_PATH), MAP_TYPE);
             }
         } catch (Exception exception) {
-            log.warn("Failed to load Tongyi API config file", exception);
+            log.warn("无法加载通义 API 配置文件", exception);
         }
 
         Map<String, Object> defaults = new LinkedHashMap<>();
@@ -191,7 +191,7 @@ public class TongyiAgentServiceImpl implements TongyiAgentService {
             Files.createDirectories(CONFIG_PATH.getParent());
             Files.writeString(CONFIG_PATH, objectMapper.writeValueAsString(fileConfig));
         } catch (IOException exception) {
-            throw new IllegalStateException("Failed to save Tongyi API config", exception);
+            throw new IllegalStateException("保存通义 API 配置失败", exception);
         }
     }
 

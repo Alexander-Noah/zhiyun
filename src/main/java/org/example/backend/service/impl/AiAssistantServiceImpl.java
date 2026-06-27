@@ -12,10 +12,14 @@ import java.util.Map;
 @Slf4j
 @Service
 public class AiAssistantServiceImpl implements AiAssistantService {
+
     private final TongyiAgentService tongyiAgentService;
     private final BusinessLoopService businessLoopService;
 
-    public AiAssistantServiceImpl(TongyiAgentService tongyiAgentService, BusinessLoopService businessLoopService) {
+    public AiAssistantServiceImpl(
+            TongyiAgentService tongyiAgentService,
+            BusinessLoopService businessLoopService
+    ) {
         this.tongyiAgentService = tongyiAgentService;
         this.businessLoopService = businessLoopService;
     }
@@ -28,29 +32,42 @@ public class AiAssistantServiceImpl implements AiAssistantService {
     @Override
     public String generateAnswer(String question, String scene, List<Map<String, Object>> images) {
         if (!tongyiAgentService.isConfigured()) {
-            recordAiEvent(scene, question, "\u672a\u914d\u7f6e");
-            return "\u901a\u4e49\u667a\u80fd\u4f53\u5c1a\u672a\u5728\u540e\u7aef\u914d\u7f6e\uff0c\u8bf7\u5728\u670d\u52a1\u5668\u73af\u5883\u53d8\u91cf\u6216 application.yaml \u4e2d\u914d\u7f6e TONGYI_API_KEY \u548c TONGYI_AGENT_APP_ID\u3002";
+            recordAiEvent(scene, question, "未配置");
+            return "通义智能体尚未在后端配置，请在服务器环境变量或 application.yaml 中配置 TONGYI_API_KEY 和 TONGYI_AGENT_APP_ID。";
         }
 
         try {
-            String answer = tongyiAgentService.callAgent(question, scene, images == null ? List.of() : images);
-            recordAiEvent(scene, question, "\u5df2\u56de\u590d");
+            String answer = tongyiAgentService.callAgent(
+                    question,
+                    scene,
+                    images == null ? List.of() : images
+            );
+
+            recordAiEvent(scene, question, "已回复");
             return answer;
         } catch (Exception exception) {
             log.warn("Tongyi agent call failed", exception);
-            recordAiEvent(scene, question, "\u8c03\u7528\u5931\u8d25");
+            recordAiEvent(scene, question, "调用失败");
+
             if (images != null && !images.isEmpty()) {
                 return "图片识别调用失败，请确认通义视觉模型已启用，或在 application.yaml / 环境变量中配置 TONGYI_VISION_MODEL。";
             }
-            return "\u901a\u4e49\u667a\u80fd\u4f53\u8c03\u7528\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u5b66\u6821\u670d\u52a1\u5668\u7f51\u7edc\u3001\u516c\u53f8 API Key\u3001\u667a\u80fd\u4f53 APP_ID \u548c\u963f\u91cc\u4e91\u767e\u70bc\u670d\u52a1\u72b6\u6001\u3002";
+
+            return "通义智能体调用失败，请检查学校服务器网络、公司 API Key、智能体 APP_ID 和阿里云百炼服务状态。";
         }
     }
 
     private void recordAiEvent(String scene, String question, String status) {
-        businessLoopService.recordEvent("ai-assistant", "consult", firstNonBlank(scene, "\u667a\u80fd\u95ee\u7b54"), status, Map.of(
-                "scene", firstNonBlank(scene, "default"),
-                "questionLength", question == null ? 0 : question.length()
-        ));
+        businessLoopService.recordEvent(
+                "ai-assistant",
+                "consult",
+                firstNonBlank(scene, "智能问答"),
+                status,
+                Map.of(
+                        "scene", firstNonBlank(scene, "default"),
+                        "questionLength", question == null ? 0 : question.length()
+                )
+        );
     }
 
     private String firstNonBlank(String... values) {

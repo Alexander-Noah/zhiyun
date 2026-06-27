@@ -84,7 +84,7 @@ public class PasswordService {
             PBEKeySpec spec = new PBEKeySpec(rawPassword.toCharArray(), salt, iterationCount, HASH_BITS);
             return SecretKeyFactory.getInstance(ALGORITHM).generateSecret(spec).getEncoded();
         } catch (Exception exception) {
-            throw new IllegalStateException("password hash failed", exception);
+            throw new IllegalStateException("密码哈希转换失败", exception);
         }
     }
 }

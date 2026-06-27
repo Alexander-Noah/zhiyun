@@ -9,6 +9,7 @@ import org.example.backend.service.LabService;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -78,7 +79,7 @@ public class DashboardServiceImpl implements DashboardService {
         long approvedTodayReservations = safeLong("今日已通过预约总数", () -> dashboardMapper.countApprovedTodayReservations(managerUserId), loadWarnings);
         long activeRepairs = safeLong("处理中报修总数", () -> dashboardMapper.countActiveRepairs(managerUserId), loadWarnings);
         long highPriorityRepairs = safeLong("高优先级报修总数", () -> dashboardMapper.countHighPriorityRepairs(managerUserId), loadWarnings);
-        long scheduledLabs = labTodaySchedules.stream().filter(this::hasScheduleCourse).count();
+        long scheduledLabs = countScheduledLabs(labTodaySchedules);
 
         List<Map<String, Object>> stats = new ArrayList<>();
         stats.add(metric("实验室", labCount, "间", "lab", "#2563eb", "开放 " + openLabs + " 间"));
@@ -95,29 +96,32 @@ public class DashboardServiceImpl implements DashboardService {
             List<Map<String, Object>> rawTodaySchedules,
             Set<Long> activeLabIds
     ) {
-        return scopedLabs.stream()
-                .map(lab -> buildTodayScheduleRow(lab, rawTodaySchedules, activeLabIds))
-                .toList();
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (LabEntity lab : scopedLabs) {
+            List<Map<String, Object>> matchedSchedules = rawTodaySchedules.stream()
+                    .filter(schedule -> isScheduleForLab(schedule, lab))
+                    .sorted(Comparator.comparing(schedule -> String.valueOf(schedule.getOrDefault("time", ""))))
+                    .map(schedule -> buildTodayScheduleRow(lab, schedule))
+                    .toList();
+            if (matchedSchedules.isEmpty()) {
+                rows.add(buildEmptyTodayScheduleRow(lab, activeLabIds));
+            } else {
+                rows.addAll(matchedSchedules);
+            }
+        }
+        return rows;
     }
 
-    private Map<String, Object> buildTodayScheduleRow(
-            LabEntity lab,
-            List<Map<String, Object>> rawTodaySchedules,
-            Set<Long> activeLabIds
-    ) {
-        Map<String, Object> matchedSchedule = rawTodaySchedules.stream()
-                .filter(schedule -> isScheduleForLab(schedule, lab))
-                .sorted(this::compareScheduleStatus)
-                .findFirst()
-                .orElse(null);
+    private Map<String, Object> buildTodayScheduleRow(LabEntity lab, Map<String, Object> schedule) {
+        Map<String, Object> row = new LinkedHashMap<>(schedule);
+        row.put("labId", lab.getId());
+        row.put("lab", resolveLabDisplay(lab));
+        return row;
+    }
 
-        if (matchedSchedule != null) {
-            Map<String, Object> row = new LinkedHashMap<>(matchedSchedule);
-            row.put("lab", resolveLabDisplay(lab));
-            return row;
-        }
-
+    private Map<String, Object> buildEmptyTodayScheduleRow(LabEntity lab, Set<Long> activeLabIds) {
         Map<String, Object> row = new LinkedHashMap<>();
+        row.put("labId", lab.getId());
         row.put("time", "-");
         row.put("lab", resolveLabDisplay(lab));
         row.put("course", "今日暂无课程");
@@ -129,35 +133,31 @@ public class DashboardServiceImpl implements DashboardService {
     }
 
     private boolean isScheduleForLab(Map<String, Object> schedule, LabEntity lab) {
+        Long scheduleLabId = toLong(schedule.get("labId"));
+        if (scheduleLabId != null && lab.getId() != null && scheduleLabId.equals(Long.valueOf(lab.getId()))) {
+            return true;
+        }
         String scheduleLab = normalizeText(schedule.get("lab"));
+        String scheduleClassroom = normalizeText(schedule.get("classroom"));
         return isSameText(scheduleLab, lab.getLabCode())
                 || isSameText(scheduleLab, lab.getLabName())
-                || isSameText(scheduleLab, lab.getRoomNo());
-    }
-
-    private int compareScheduleStatus(Map<String, Object> left, Map<String, Object> right) {
-        int leftRank = scheduleStatusRank(left.get("status"));
-        int rightRank = scheduleStatusRank(right.get("status"));
-        if (leftRank != rightRank) {
-            return Integer.compare(leftRank, rightRank);
-        }
-        int timeResult = String.valueOf(left.getOrDefault("time", "")).compareTo(String.valueOf(right.getOrDefault("time", "")));
-        if (timeResult != 0) {
-            return timeResult;
-        }
-        return String.valueOf(left.getOrDefault("course", "")).compareTo(String.valueOf(right.getOrDefault("course", "")));
-    }
-
-    private int scheduleStatusRank(Object status) {
-        String text = String.valueOf(status);
-        if ("进行中".equals(text)) return 0;
-        if ("即将开始".equals(text)) return 1;
-        if ("已结束".equals(text)) return 2;
-        return 3;
+                || isSameText(scheduleLab, lab.getRoomNo())
+                || containsText(scheduleClassroom, lab.getLabName())
+                || containsText(scheduleClassroom, lab.getLabCode())
+                || containsText(scheduleClassroom, lab.getRoomNo());
     }
 
     private boolean hasScheduleCourse(Map<String, Object> row) {
         return !"今日暂无课程".equals(String.valueOf(row.get("course")));
+    }
+
+    private long countScheduledLabs(List<Map<String, Object>> rows) {
+        return rows.stream()
+                .filter(this::hasScheduleCourse)
+                .map(row -> firstNonBlank(row.get("labId"), row.get("lab")))
+                .filter(value -> !value.isBlank())
+                .distinct()
+                .count();
     }
 
     private String resolveLabDisplay(LabEntity lab) {
@@ -176,8 +176,27 @@ public class DashboardServiceImpl implements DashboardService {
         return !left.isBlank() && !rightText.isBlank() && left.equals(rightText);
     }
 
+    private boolean containsText(String left, Object right) {
+        String rightText = normalizeText(right);
+        return !left.isBlank() && !rightText.isBlank() && left.contains(rightText);
+    }
+
     private String normalizeText(Object value) {
         return value == null ? "" : String.valueOf(value).trim().toLowerCase().replaceAll("\\s+", "");
+    }
+
+    private Long toLong(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        try {
+            return Long.valueOf(String.valueOf(value));
+        } catch (NumberFormatException exception) {
+            return null;
+        }
     }
 
     private List<Map<String, Object>> buildLabUsage(List<LabEntity> scopedLabs, Set<Long> activeLabIds) {

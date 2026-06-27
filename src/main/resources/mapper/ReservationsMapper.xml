@@ -164,7 +164,7 @@
               ) &lt; (
                 time_to_sec(str_to_date(substring_index(#{reservation.timeRange}, '-', -1), '%H:%i')) / 60
               )
-          and r.status not in ('已驳回', '已取消')
+          and r.status not in ('已驳回', '已取消', '已过期', '已完成')
           and (#{id} is null or r.id &lt;&gt; #{id})
     </select>
     <select id="countTimetableConflicts" resultType="int">
@@ -182,7 +182,12 @@
                 limit 1
             )
         )
-        where t.weekday = #{weekday}
+        where convert(t.weekday using utf8mb4) collate utf8mb4_general_ci =
+              convert(cast(#{weekday} as char) using utf8mb4_general_ci
+        and find_in_set(
+            convert(cast(#{week} as char) using utf8mb4) collate utf8mb4_general_ci,
+            convert(t.week_expanded using utf8mb4) collate utf8mb4_general_ci
+            ) &gt;0)
           and find_in_set(cast(#{week} as char), t.week_expanded) &gt; 0
           and (
 	              (
@@ -281,6 +286,7 @@
             review_remark = coalesce(nullif(#{reservation.reviewRemark}, ''), '驳回'),
             updated_at = now()
         where id = #{id}
+          and status in ('待审核', '冲突')
     </update>
     <update id="getApproved">
             update lab_reservation
@@ -291,6 +297,7 @@
                 review_remark = coalesce(nullif(#{reservation.reviewRemark}, ''), '通过'),
                 updated_at = now()
             where id = #{id}
+              and status = '待审核'
     </update>
     <update id="updateReviewStatus">
         update lab_reservation

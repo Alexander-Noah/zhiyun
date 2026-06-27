@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="org.example.backend.mapper.BusinessLoopReportMapper">
+
+    <select id="countReservations" resultType="long">
+        select count(1)
+        from lab_reservation
+    </select>
+
+    <select id="countApprovedReservations" resultType="long">
+        select count(1)
+        from lab_reservation
+        where status = '已通过'
+    </select>
+
+    <select id="countPendingReservations" resultType="long">
+        select count(1)
+        from lab_reservation
+        where status in ('待审核', '冲突')
+    </select>
+
+    <select id="countUsageRecords" resultType="long">
+        select count(1)
+        from usage_record
+    </select>
+
+    <select id="countUsageRecordsFromReservations" resultType="long">
+        select count(1)
+        from usage_record
+        where remark like concat('%', '预约编号', '%')
+    </select>
+
+    <select id="countAbnormalUsageRecords" resultType="long">
+        select count(1)
+        from usage_record
+        where status = '异常'
+    </select>
+
+    <select id="countRepairOrders" resultType="long">
+        select count(1)
+        from repair_order
+    </select>
+
+    <select id="countRepairOrdersFromUsageRecords" resultType="long">
+        select count(1)
+        from repair_order
+        where description like concat('%', '使用记录#', '%')
+    </select>
+
+    <select id="countActiveRepairOrders" resultType="long">
+        select count(1)
+        from repair_order
+        where status in ('待派单', '处理中', '待验收')
+    </select>
+
+    <select id="countClosedRepairOrders" resultType="long">
+        select count(1)
+        from repair_order
+        where status in ('已完成', '已关闭')
+    </select>
+
+    <select id="countDevices" resultType="long">
+        select count(1)
+        from device
+    </select>
+
+    <select id="countNormalDevices" resultType="long">
+        select count(1)
+        from device
+        where status = '正常'
+    </select>
+
+    <select id="countMaintenanceDevices" resultType="long">
+        select count(1)
+        from device
+        where status = '维护中'
+    </select>
+
+    <select id="countFaultDevices" resultType="long">
+        select count(1)
+        from device
+        where status = '故障'
+    </select>
+
+    <select id="countCourseEnvironmentRequests" resultType="long">
+        select count(1)
+        from course_environment_request
+    </select>
+
+    <select id="countConfirmedCourseEnvironmentRequests" resultType="long">
+        select count(1)
+        from course_environment_request
+        where process_status = '已确认'
+           or confirm_status = '已确认'
+    </select>
+
+    <select id="countEnvironmentTemplates" resultType="long">
+        select count(1)
+        from environment_template
+    </select>
+
+    <select id="countConsumables" resultType="long">
+        select count(1)
+        from consumable_inventory
+    </select>
+
+    <select id="countLowStockConsumables" resultType="long">
+        select count(1)
+        from consumable_inventory
+        where tag_type in ('danger', 'warning')
+           or stock &lt;= warn_threshold
+    </select>
+
+    <select id="countNotices" resultType="long">
+        select count(1)
+        from notice
+    </select>
+
+    <select id="countPublishedNotices" resultType="long">
+        select count(1)
+        from notice
+        where publish_status = '已发布'
+    </select>
+
+    <select id="countOperationEvents" resultType="long">
+        select count(1)
+        from module_record
+        where module_name = 'operation-events'
+    </select>
+
+    <select id="listUsageTrend" resultType="java.util.Map">
+        select
+            date_format(use_time, '%m-%d') as name,
+            count(1) as value
+        from usage_record
+        where use_time &gt;= date_sub(curdate(), interval 6 day)
+        group by date_format(use_time, '%m-%d')
+        order by min(use_time)
+    </select>
+
+    <select id="listLabUsageRanking" resultType="java.util.Map">
+        select
+            coalesce(l.lab_code, resource) as name,
+            count(1) as value
+        from usage_record ur
+                 left join lab l on ur.resource = l.lab_name
+            or ur.resource = concat(l.lab_code, ' ', l.lab_name)
+        group by coalesce(l.lab_code, resource)
+        order by value desc
+        limit 8
+    </select>
+
+    <select id="listRepairFaultRanking" resultType="java.util.Map">
+        select
+            coalesce(nullif(fault_type, ''), '未分类') as name,
+            count(1) as value
+        from repair_order
+        group by coalesce(nullif(fault_type, ''), '未分类')
+        order by value desc
+        limit 8
+    </select>
+
+    <select id="listLatestEventJson" resultType="java.lang.String">
+        select record_json
+        from module_record
+        where module_name = 'operation-events'
+        order by id desc
+        limit #{limit}
+    </select>
+
+</mapper>

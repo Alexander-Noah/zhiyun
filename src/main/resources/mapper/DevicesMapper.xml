@@ -3,40 +3,111 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="org.example.backend.mapper.DevicesMapper">
+    <sql id="DeviceColumns">
+        d.id,
+        d.device_code as deviceCode,
+        d.device_name as deviceName,
+        d.category,
+        d.lab_id as labId,
+        coalesce(d.lab_name, l.lab_name) as labName,
+        d.location,
+        d.owner_user_id as ownerUserId,
+        coalesce(u.real_name, u.username) as ownerUsername,
+        coalesce(d.quantity, 1) as quantity,
+        coalesce(d.unit, '台') as unit,
+        d.status,
+        d.health,
+        d.online,
+        d.specs,
+        d.standard_requirement as standardRequirement,
+        d.remark,
+        d.source_type as sourceType,
+        d.purchase_date as purchaseDate,
+        d.inventory_date as inventoryDate,
+        d.warranty_date as warrantyDate,
+        d.usage_hours as usageHours,
+        d.maintenance,
+        coalesce(d.deleted, 0) as deleted,
+        d.created_at as createdAt,
+        d.updated_at as updatedAt
+    </sql>
+
+    <sql id="DeviceFrom">
+        from device d
+        left join lab l on d.lab_id = l.id
+        left join sys_user u on u.id = d.owner_user_id
+    </sql>
+
+    <sql id="DeviceFilters">
+        where coalesce(d.deleted, 0) = 0
+        <if test="keyword != null and keyword != ''">
+            and (
+                d.device_code like concat('%', #{keyword}, '%')
+                or d.device_name like concat('%', #{keyword}, '%')
+            )
+        </if>
+        <if test="labId != null">
+            and d.lab_id = #{labId}
+        </if>
+        <if test="labName != null and labName != ''">
+            and coalesce(d.lab_name, l.lab_name) = #{labName}
+        </if>
+        <if test="category != null and category != ''">
+            and d.category = #{category}
+        </if>
+        <if test="status != null and status != ''">
+            and d.status = #{status}
+        </if>
+    </sql>
+
     <insert id="InserterDevices" useGeneratedKeys="true" keyProperty="id">
         insert into device (
             device_code,
             device_name,
             category,
             lab_id,
+            lab_name,
             location,
             owner_user_id,
+            quantity,
+            unit,
             status,
             health,
             online,
             specs,
+            standard_requirement,
+            remark,
+            source_type,
             purchase_date,
             inventory_date,
             warranty_date,
             usage_hours,
-            maintenance
+            maintenance,
+            deleted
         )
         values(
             #{deviceCode},
             #{deviceName},
             #{category},
             #{labId},
+            #{labName},
             #{location},
             #{ownerUserId},
+            #{quantity},
+            #{unit},
             #{status},
             #{health},
             #{online},
             #{specs},
+            #{standardRequirement},
+            #{remark},
+            #{sourceType},
             #{purchaseDate},
             #{inventoryDate},
             #{warrantyDate},
             #{usageHours},
-            #{maintenance}
+            #{maintenance},
+            coalesce(#{deleted}, 0)
         )
     </insert>
 
@@ -47,12 +118,18 @@
             device_name = #{devices.deviceName},
             category = #{devices.category},
             lab_id = #{devices.labId},
+            lab_name = #{devices.labName},
             location = #{devices.location},
             owner_user_id = #{devices.ownerUserId},
+            quantity = #{devices.quantity},
+            unit = #{devices.unit},
             status = #{devices.status},
             health = #{devices.health},
             online = #{devices.online},
             specs = #{devices.specs},
+            standard_requirement = #{devices.standardRequirement},
+            remark = #{devices.remark},
+            source_type = #{devices.sourceType},
             purchase_date = #{devices.purchaseDate},
             inventory_date = #{devices.inventoryDate},
             warranty_date = #{devices.warrantyDate},
@@ -60,6 +137,7 @@
             maintenance = #{devices.maintenance},
             updated_at = now()
         where id = #{id}
+          and coalesce(deleted, 0) = 0
     </update>
 
     <update id="updateDeviceRuntimeStateByNameOrCode">
@@ -70,8 +148,8 @@
             online = #{online},
             maintenance = trim(concat(coalesce(maintenance, ''), '\n', #{maintenance})),
             updated_at = now()
-        where device_name = #{device}
-           or device_code = #{device}
+        where coalesce(deleted, 0) = 0
+          and (device_name = #{device} or device_code = #{device})
     </update>
 
     <update id="updateInventoryState">
@@ -83,88 +161,74 @@
             inventory_date = #{inventoryDate},
             updated_at = now()
         where id = #{id}
+          and coalesce(deleted, 0) = 0
     </update>
 
     <update id="updateTransferState">
         update device
         set
             lab_id = #{labId},
-            owner_user_id = #{ownerUserId},
             location = #{location},
+            owner_user_id = #{ownerUserId},
+            updated_at = now()
+        where id = #{id}
+          and coalesce(deleted, 0) = 0
+    </update>
+
+    <update id="deleteDevices">
+        update device
+        set deleted = 1,
             updated_at = now()
         where id = #{id}
     </update>
 
-    <delete id="deleteDevices">
-        delete from device
-        where id = #{id}
-    </delete>
-
-    <sql id="DeviceColumns">
-        d.id,
-        d.device_code as deviceCode,
-        d.device_name as deviceName,
-        d.category,
-        d.lab_id as labId,
-        l.lab_name as labName,
-        d.location,
-        d.owner_user_id as ownerUserId,
-        coalesce(u.real_name, u.username) as ownerUsername,
-        d.status,
-        d.health,
-        d.online,
-        d.specs,
-        d.purchase_date as purchaseDate,
-        d.inventory_date as inventoryDate,
-        d.warranty_date as warrantyDate,
-        d.usage_hours as usageHours,
-        d.maintenance,
-        d.created_at as createdAt,
-        d.updated_at as updatedAt
-    </sql>
-
     <select id="getDevices" resultType="org.example.backend.entity.DevicesEntity">
         select
             <include refid="DeviceColumns" />
-        from device d
-        left join lab l on d.lab_id = l.id
-        left join sys_user u on u.id = d.owner_user_id
-        order by d.id
+        <include refid="DeviceFrom" />
+        where coalesce(d.deleted, 0) = 0
+        order by d.created_at desc, d.id desc
+    </select>
+
+    <select id="pageDevices" resultType="org.example.backend.entity.DevicesEntity">
+        select
+            <include refid="DeviceColumns" />
+        <include refid="DeviceFrom" />
+        <include refid="DeviceFilters" />
+        order by d.created_at desc, d.id desc
+        limit #{pageSize} offset #{offset}
+    </select>
+
+    <select id="countDevices" resultType="long">
+        select count(1)
+        <include refid="DeviceFrom" />
+        <include refid="DeviceFilters" />
+    </select>
+
+    <select id="getDeviceStats" resultType="map">
+        select
+            count(1) as total,
+            sum(case when status = '正常' then 1 else 0 end) as normal,
+            sum(case when status = '维修中' then 1 else 0 end) as repairing,
+            sum(case when status = '已报废' then 1 else 0 end) as scrapped
+        from device
+        where coalesce(deleted, 0) = 0
     </select>
 
     <select id="getDevicesById" resultType="org.example.backend.entity.DevicesEntity">
         select
             <include refid="DeviceColumns" />
-        from device d
-        left join lab l on d.lab_id = l.id
-        left join sys_user u on u.id = d.owner_user_id
+        <include refid="DeviceFrom" />
         where d.id = #{id}
+          and coalesce(d.deleted, 0) = 0
     </select>
+
     <select id="getDevicesByLabId" resultType="org.example.backend.entity.DevicesEntity">
-    select
-        d.id,
-        d.device_code AS deviceCode,
-        d.device_name AS deviceName,
-        d.category,
-        d.lab_id AS labId,
-        l.lab_name AS labName,
-        d.location,
-        d.owner_user_id AS ownerUserId,
-        u.username AS ownerUsername,
-        d.status,
-        d.health,
-        d.online,
-        d.specs,
-        d.purchase_date AS purchaseDate,
-        d.inventory_date AS inventoryDate,
-        d.warranty_date AS warrantyDate,
-        d.usage_hours AS usageHours,
-        d.maintenance,
-        d.created_at AS createdAt,
-        d.updated_at AS updatedAt
-    from device as d
-    left join sys_user u on d.owner_user_id = u.id
-    left join lab l on d.lab_id = l.id
-    where lab_id = #{labId}
+        select
+            <include refid="DeviceColumns" />
+        <include refid="DeviceFrom" />
+        where d.lab_id = #{labId}
+          and coalesce(d.deleted, 0) = 0
+        order by d.created_at desc, d.id desc
     </select>
 </mapper>

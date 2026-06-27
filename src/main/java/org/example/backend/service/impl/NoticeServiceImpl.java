@@ -56,7 +56,7 @@ public class NoticeServiceImpl implements NoticeService {
     public List<NoticeEntity> deleteNotice(Long id) {
         NoticeEntity notice = noticeMapper.getNotice(id);
         noticeMapper.logicalDeleteNotice(id);
-        businessLoopService.recordEvent("notice", "delete", notice == null ? String.valueOf(id) : notice.getTitle(), "\u5df2\u5220\u9664", Map.of("id", id));
+        businessLoopService.recordEvent("notice", "delete", notice == null ? String.valueOf(id) : notice.getTitle(), "已删除", Map.of("id", id));
         return noticeMapper.listNotices();
     }
 
@@ -70,7 +70,7 @@ public class NoticeServiceImpl implements NoticeService {
             noticeMapper.insertNotice(normalizedNotice);
             refreshRecipientsIfPublished(noticeMapper.getNotice(normalizedNotice.getId()));
         }
-        businessLoopService.recordEvent("notice", "batch-save", "\u901a\u77e5\u516c\u544a", "\u5df2\u540c\u6b65", Map.of("count", notices == null ? 0 : notices.size()));
+        businessLoopService.recordEvent("notice", "batch-save", "通知公告", "已同步", Map.of("count", notices == null ? 0 : notices.size()));
         return noticeMapper.listNotices();
     }
 
@@ -83,7 +83,7 @@ public class NoticeServiceImpl implements NoticeService {
             noticeMapper.insertNotice(normalizeNotice(notice));
             refreshRecipientsIfPublished(noticeMapper.getNotice(notice.getId()));
         }
-        businessLoopService.recordEvent("notice", "reset", "\u901a\u77e5\u516c\u544a", "\u5df2\u6062\u590d\u521d\u59cb\u516c\u544a", Map.of("count", getDefaultNotices().size()));
+        businessLoopService.recordEvent("notice", "reset", "通知公告", "已恢复初始公告", Map.of("count", getDefaultNotices().size()));
         return noticeMapper.listNotices();
     }
 
@@ -210,7 +210,7 @@ public class NoticeServiceImpl implements NoticeService {
         details.put("id", notice.getId());
         details.put("type", firstNonBlank(notice.getNoticeType(), notice.getType()));
         details.put("target", firstNonBlank(notice.getTargetRole(), notice.getTarget()));
-        businessLoopService.recordEvent("notice", action, firstNonBlank(notice.getTitle(), "\u901a\u77e5\u516c\u544a"), firstNonBlank(notice.getPublishStatus(), notice.getStatus()), details);
+        businessLoopService.recordEvent("notice", action, firstNonBlank(notice.getTitle(), "通知公告"), firstNonBlank(notice.getPublishStatus(), notice.getStatus()), details);
     }
 
     private void refreshRecipientsIfPublished(NoticeEntity notice) {

@@ -58,38 +58,42 @@ public class JwtService {
 
     public JwtClaims validateToken(String token) {
         if (token == null || token.isBlank()) {
-            throw new IllegalArgumentException("missing token");
+            throw new IllegalArgumentException("缺少令牌");
         }
 
         String[] parts = token.split("\\.");
         if (parts.length != 3) {
-            throw new IllegalArgumentException("invalid token format");
+            throw new IllegalArgumentException("无效的令牌格式");
         }
 
         String expectedSignature = sign(parts[0] + "." + parts[1]);
-        if (!MessageDigest.isEqual(expectedSignature.getBytes(StandardCharsets.UTF_8), parts[2].getBytes(StandardCharsets.UTF_8))) {
-            throw new IllegalArgumentException("invalid token signature");
+        if (!MessageDigest.isEqual(
+                expectedSignature.getBytes(StandardCharsets.UTF_8),
+                parts[2].getBytes(StandardCharsets.UTF_8)
+        )) {
+            throw new IllegalArgumentException("无效的令牌签名");
         }
 
         String headerJson = decodeJson(parts[0]);
-        if (!"HS256".equals(stringValue(jsonValue(headerJson, "alg"))) || !TOKEN_TYPE.equals(stringValue(jsonValue(headerJson, "typ")))) {
-            throw new IllegalArgumentException("invalid token header");
+        if (!"HS256".equals(stringValue(jsonValue(headerJson, "alg")))
+                || !TOKEN_TYPE.equals(stringValue(jsonValue(headerJson, "typ")))) {
+            throw new IllegalArgumentException("无效的令牌头");
         }
 
         String payloadJson = decodeJson(parts[1]);
         String tokenIssuer = stringValue(jsonValue(payloadJson, "iss"));
         if (!issuer.isBlank() && !issuer.equals(tokenIssuer)) {
-            throw new IllegalArgumentException("invalid token issuer");
+            throw new IllegalArgumentException("无效的令牌发布者");
         }
 
         long expiresAt = numberValue(jsonValue(payloadJson, "exp"));
         if (expiresAt <= Instant.now().getEpochSecond()) {
-            throw new IllegalArgumentException("token expired");
+            throw new IllegalArgumentException("令牌已过期");
         }
 
         String username = stringValue(jsonValue(payloadJson, "sub"));
         if (username.isBlank()) {
-            throw new IllegalArgumentException("token subject missing");
+            throw new IllegalArgumentException("缺少令牌主体");
         }
 
         return new JwtClaims(
@@ -109,7 +113,7 @@ public class JwtService {
             byte[] decoded = Base64.getUrlDecoder().decode(value);
             return new String(decoded, StandardCharsets.UTF_8);
         } catch (RuntimeException exception) {
-            throw new IllegalArgumentException("invalid token payload", exception);
+            throw new IllegalArgumentException("令牌内容解析失败", exception);
         }
     }
 
@@ -119,7 +123,7 @@ public class JwtService {
             mac.init(new SecretKeySpec(secret, HMAC_ALGORITHM));
             return base64Url(mac.doFinal(value.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception exception) {
-            throw new IllegalStateException("jwt sign failed", exception);
+            throw new IllegalStateException("JWT 签名失败", exception);
         }
     }
 
@@ -130,14 +134,17 @@ public class JwtService {
     private String toJson(Map<String, Object> value) {
         StringBuilder json = new StringBuilder("{");
         boolean first = true;
+
         for (Map.Entry<String, Object> entry : value.entrySet()) {
             if (!first) {
                 json.append(',');
             }
+
             first = false;
             json.append('"').append(escapeJson(entry.getKey())).append("\":");
             appendJsonValue(json, entry.getValue());
         }
+
         return json.append('}').toString();
     }
 
@@ -146,16 +153,19 @@ public class JwtService {
             json.append("null");
             return;
         }
+
         if (value instanceof Number || value instanceof Boolean) {
             json.append(value);
             return;
         }
+
         json.append('"').append(escapeJson(String.valueOf(value))).append('"');
     }
 
     private String jsonValue(String json, String key) {
         String keyToken = "\"" + escapeJson(key) + "\"";
         int keyIndex = json.indexOf(keyToken);
+
         if (keyIndex < 0) {
             return "";
         }
@@ -186,17 +196,21 @@ public class JwtService {
             }
             endIndex++;
         }
+
         String rawValue = json.substring(valueIndex, endIndex).trim();
         return "null".equals(rawValue) ? "" : rawValue;
     }
 
     private String readJsonString(String json, int startIndex) {
         StringBuilder value = new StringBuilder();
+
         for (int index = startIndex; index < json.length(); index++) {
             char current = json.charAt(index);
+
             if (current == '"') {
                 return value.toString();
             }
+
             if (current != '\\' || index + 1 >= json.length()) {
                 value.append(current);
                 continue;
@@ -214,22 +228,31 @@ public class JwtService {
                 case 't' -> value.append('\t');
                 case 'u' -> {
                     if (index + 4 >= json.length()) {
-                        throw new IllegalArgumentException("invalid json string escape");
+                        throw new IllegalArgumentException("无效的 JSON 字符串转义");
                     }
+
                     String hex = json.substring(index + 1, index + 5);
-                    value.append((char) Integer.parseInt(hex, 16));
+                    try {
+                        value.append((char) Integer.parseInt(hex, 16));
+                    } catch (NumberFormatException exception) {
+                        throw new IllegalArgumentException("无效的 JSON Unicode 转义", exception);
+                    }
+
                     index += 4;
                 }
                 default -> value.append(escaped);
             }
         }
-        throw new IllegalArgumentException("unterminated json string");
+
+        throw new IllegalArgumentException("JSON 字符串未正常结束");
     }
 
     private String escapeJson(String value) {
         StringBuilder escaped = new StringBuilder();
+
         for (int index = 0; index < value.length(); index++) {
             char current = value.charAt(index);
+
             switch (current) {
                 case '"' -> escaped.append("\\\"");
                 case '\\' -> escaped.append("\\\\");
@@ -247,6 +270,7 @@ public class JwtService {
                 }
             }
         }
+
         return escaped.toString();
     }
 
@@ -265,3 +289,4 @@ public class JwtService {
     public record JwtClaims(String username, String roleCode, String userId, long expiresAt) {
     }
 }
+

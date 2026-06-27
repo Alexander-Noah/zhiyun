@@ -48,7 +48,7 @@ public class UsageRecordServiceImpl implements UsageRecordService {
     @Override
     public List<UsageRecordEntity> resetUsageRecords() {
         List<UsageRecordEntity> records = listUsageRecords();
-        businessLoopService.recordEvent("usage-record", "reset", "\u4f7f\u7528\u8bb0\u5f55\u53f0\u8d26", "\u5df2\u6062\u590d\u5f53\u524d\u53f0\u8d26", Map.of("count", records.size()));
+        businessLoopService.recordEvent("usage-record", "reset", "使用记录台账", "已恢复当前台账", Map.of("count", records.size()));
         return records;
     }
 
@@ -57,7 +57,7 @@ public class UsageRecordServiceImpl implements UsageRecordService {
     public UsageRecordEntity updateStatus(Long id, String status) {
         int updatedCount = usageRecordMapper.updateUsageRecordStatus(id, status);
         if (updatedCount == 0) {
-            throw new IllegalArgumentException("usage record not found");
+            throw new IllegalArgumentException("未找到使用记录");
         }
         UsageRecordEntity usageRecord = usageRecordMapper.getUsageRecord(id);
         if (status != null && status.contains("异常")) {

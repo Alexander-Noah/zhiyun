@@ -16,11 +16,11 @@ import java.util.UUID;
 @Service
 public class RepairServiceImpl implements RepairService {
     private static final DateTimeFormatter TICKET_DATE = DateTimeFormatter.BASIC_ISO_DATE;
-    private static final String STATUS_WAIT_DISPATCH = "\u5f85\u6d3e\u5355";
-    private static final String STATUS_UPDATED = "\u5df2\u66f4\u65b0";
-    private static final String STATUS_DELETED = "\u5df2\u5220\u9664";
-    private static final String ASSIGNEE_PENDING = "\u5f85\u5206\u914d";
-    private static final String RESULT_PENDING = "\u5f85\u7ef4\u4fee\u4eba\u5458\u63a5\u5355\u3002";
+    private static final String STATUS_WAIT_DISPATCH = "待派单";
+    private static final String STATUS_UPDATED = "已更新";
+    private static final String STATUS_DELETED = "已删除";
+    private static final String ASSIGNEE_PENDING = "待分配";
+    private static final String RESULT_PENDING = "待维修人员接单。";
 
     private final RepairMapper repairMapper;
     private final BusinessLoopService businessLoopService;
@@ -89,7 +89,7 @@ public class RepairServiceImpl implements RepairService {
 
     @Override
     public List<RepairEntity> resetRepairs() {
-        businessLoopService.recordEvent("repair", "reset", "\u62a5\u4fee\u5de5\u5355", "\u5df2\u6062\u590d\u5f53\u524d\u53f0\u8d26", Map.of("count", listRepairs().size()));
+        businessLoopService.recordEvent("repair", "reset", "报修工单", "已恢复当前台账", Map.of("count", listRepairs().size()));
         return listRepairs();
     }
 

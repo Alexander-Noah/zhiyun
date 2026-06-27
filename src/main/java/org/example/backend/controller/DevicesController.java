@@ -3,11 +3,26 @@ package org.example.backend.controller;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.entity.DeviceInventoryRecordEntity;
 import org.example.backend.entity.DeviceTransferRecordEntity;
-import org.example.backend.result.Result;
 import org.example.backend.entity.DevicesEntity;
+import org.example.backend.result.Result;
 import org.example.backend.service.DevicesService;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 
@@ -26,14 +41,63 @@ public class DevicesController {
         return Result.success("获取设备列表成功", devicesService.getDevices());
     }
 
+    @GetMapping("/devices/page")
+    public Result pageDevices(@ModelAttribute DevicesService.DevicePageQuery query) {
+        return Result.success("获取设备资产分页成功", devicesService.pageDevices(query));
+    }
+
+    @GetMapping("/devices/stats")
+    public Result getDeviceStats() {
+        return Result.success("获取设备资产统计成功", devicesService.getDeviceStats());
+    }
+
+    @PostMapping("/devices/import")
+    public Result importDevices(@RequestParam("file") MultipartFile file) {
+        return Result.success("导入设备资产成功", devicesService.importDevices(file));
+    }
+
+    @GetMapping("/devices/export")
+    public ResponseEntity<byte[]> exportDevices(@ModelAttribute DevicesService.DevicePageQuery query) {
+        byte[] content = devicesService.exportDevices(query);
+        String filename = URLEncoder.encode("设备资产台账.csv", StandardCharsets.UTF_8).replace("+", "%20");
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + filename)
+                .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
+                .body(content);
+    }
+
     @PostMapping("/devices")
-    public Result InserterDevices(@RequestBody DevicesEntity devices) {
+    public Result insertDevices(@RequestBody DevicesEntity devices) {
         return Result.success("新增设备成功", devicesService.InserterDevices(devices));
     }
 
     @GetMapping("/devices/{id:\\d+}")
     public Result getDevicesById(@PathVariable Long id) {
         return Result.success("获取设备详情成功", devicesService.getDevicesById(id));
+    }
+
+    @PutMapping("/devices/{id:\\d+}")
+    public Result updateDevices(@PathVariable Long id, @RequestBody DevicesEntity devices) {
+        return Result.success("更新设备成功", devicesService.updateDevices(id, devices));
+    }
+
+    @DeleteMapping("/devices/{id:\\d+}")
+    public Result deleteDevices(@PathVariable Long id) {
+        devicesService.deleteDevices(id);
+        return Result.success("删除设备成功");
+    }
+
+    @PutMapping("/devices/batch")
+    public Result updateDevices(@RequestBody DeviceBatchRequest request) {
+        List<DevicesEntity> devices = request == null || request.getRecords() == null
+                ? Collections.emptyList()
+                : request.getRecords();
+        return Result.success("批量更新设备成功", devicesService.updateDevices(devices));
+    }
+
+    @PostMapping("/devices/reset")
+    public Result resetDevices() {
+        return Result.success("重置设备数据成功", devicesService.getDevices());
     }
 
     @GetMapping("/device-inventory-records")
@@ -64,30 +128,6 @@ public class DevicesController {
     @PostMapping("/devices/{id:\\d+}/transfer")
     public Result transferDevice(@PathVariable Long id, @RequestBody DeviceTransferRecordEntity record) {
         return Result.success("保存设备调拨成功", devicesService.transferDevice(id, record));
-    }
-
-    @PutMapping("/devices/{id:\\d+}")
-    public Result updateDevices(@PathVariable Long id, @RequestBody DevicesEntity devices) {
-        return Result.success("更新设备成功", devicesService.updateDevices(id, devices));
-    }
-
-    @DeleteMapping("/devices/{id:\\d+}")
-    public Result DeleteDevices(@PathVariable Long id) {
-        devicesService.deleteDevices(id);
-        return Result.success("删除设备成功");
-    }
-
-    @PutMapping("/devices/batch")
-    public Result updateDevices(@RequestBody DeviceBatchRequest request) {
-        List<DevicesEntity> devices = request == null || request.getRecords() == null
-                ? Collections.emptyList()
-                : request.getRecords();
-        return Result.success("批量更新设备成功", devicesService.updateDevices(devices));
-    }
-
-    @PostMapping("/devices/reset")
-    public Result resetDevices() {
-        return Result.success("重置设备数据成功", devicesService.getDevices());
     }
 
     public static class DeviceBatchRequest {

@@ -39,12 +39,12 @@ public class VoskSpeechRecognitionServiceImpl implements SpeechRecognitionServic
     @Override
     public Recognizer createRecognizer() {
         if (model == null) {
-            throw new IllegalStateException("Vosk speech model is not available");
+            throw new IllegalStateException("Vosk 语音模型不可用");
         }
         try {
             return new Recognizer(model, SAMPLE_RATE);
         } catch (Exception exception) {
-            throw new IllegalStateException("Failed to create Vosk recognizer", exception);
+            throw new IllegalStateException("无法创建 Vosk 识别器", exception);
         }
     }
 
@@ -53,7 +53,7 @@ public class VoskSpeechRecognitionServiceImpl implements SpeechRecognitionServic
         if (recognizer == null) {
             return "";
         }
-        return readText(recognizer.getResult(), "text", "Vosk result");
+        return readText(recognizer.getResult(), "text", "Vosk 结果");
     }
 
     @Override
@@ -61,7 +61,7 @@ public class VoskSpeechRecognitionServiceImpl implements SpeechRecognitionServic
         if (recognizer == null) {
             return "";
         }
-        return readText(recognizer.getPartialResult(), "partial", "Vosk partial result");
+        return readText(recognizer.getPartialResult(), "partial", "Vosk 部分结果");
     }
 
     @Override
@@ -69,7 +69,7 @@ public class VoskSpeechRecognitionServiceImpl implements SpeechRecognitionServic
         if (recognizer == null) {
             return "";
         }
-        return readText(recognizer.getFinalResult(), "text", "Vosk final result");
+        return readText(recognizer.getFinalResult(), "text", "Vosk 最终结果");
     }
 
     private String readText(String resultPayload, String textKey, String resultName) {
@@ -91,21 +91,21 @@ public class VoskSpeechRecognitionServiceImpl implements SpeechRecognitionServic
         );
         Path modelPath = Path.of(configuredPath).toAbsolutePath().normalize();
         if (!Files.isDirectory(modelPath)) {
-            log.warn("Vosk model path does not exist: {}", modelPath);
+            log.warn("Vosk 模型路径不存在: {}", modelPath);
             return null;
         }
 
         if (hasNonAscii(modelPath.toString())) {
-            log.info("Vosk model path contains non-ASCII characters, loading from ASCII temp path");
+            log.info("Vosk 模型路径包含非 ASCII 字符，正在从 ASCII 临时路径加载");
             return loadFromAsciiTempPath(modelPath);
         }
 
         try {
-            log.info("Loading Vosk model from {}", modelPath);
+            log.info("正在加载来自 {} 的 Vosk 模型", modelPath);
             return new Model(modelPath.toString());
         } catch (Exception exception) {
-            log.warn("Failed to load Vosk model from {}, trying ASCII temp path", modelPath);
-            log.debug("Vosk model load failure", exception);
+            log.warn("无法从 {} 加载 Vosk 模型，正在尝试 ASCII 临时路径", modelPath);
+            log.debug("Vosk 模型加载失败", exception);
             return loadFromAsciiTempPath(modelPath);
         }
     }
@@ -114,10 +114,10 @@ public class VoskSpeechRecognitionServiceImpl implements SpeechRecognitionServic
         Path targetPath = Path.of(System.getProperty("java.io.tmpdir"), "smart-lab-vosk-model-cn-0.22").toAbsolutePath().normalize();
         try {
             copyDirectory(sourcePath, targetPath);
-            log.info("Loading Vosk model from copied path {}", targetPath);
+            log.info("从复制的路径 {} 加载 Vosk 模型", targetPath);
             return new Model(targetPath.toString());
         } catch (Exception exception) {
-            log.warn("Failed to load Vosk model from copied path {}", targetPath, exception);
+            log.warn("无法从复制的路径 {} 加载 Vosk 模型", targetPath, exception);
             return null;
         }
     }

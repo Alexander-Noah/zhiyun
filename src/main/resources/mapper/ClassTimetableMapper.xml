@@ -59,7 +59,10 @@
             </if>
 
             <if test="week != null">
-                and find_in_set(cast(#{week} as char), week_expanded) > 0
+                and find_in_set(
+                convert(cast(#{week} as char) using utf8mb4) collate utf8mb4_general_ci,
+                convert(week_expanded using utf8mb4) collate utf8mb4_general_ci
+                ) &gt; 0
             </if>
         </where>
         order by id desc

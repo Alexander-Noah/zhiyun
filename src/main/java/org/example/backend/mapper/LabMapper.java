@@ -10,83 +10,8 @@ import java.util.List;
 
 @Mapper
 public interface LabMapper {
-    @Select("""
-            select
-                l.id,
-                l.lab_code as labCode,
-                l.lab_name as labName,
-                l.building,
-                l.floor,
-                l.room_no as roomNo,
-                l.lab_type as labType,
-                l.capacity,
-                l.manager_user_id as managerUserId,
-                u.real_name as managerName,
-                l.open_status as openStatus,
-                count(d.id) as deviceCount,
-                l.remark,
-                l.created_at as createdAt,
-                l.updated_at as updatedAt
-            from lab l
-            left join sys_user u on u.id = l.manager_user_id
-            left join device d on d.lab_id = l.id
-            group by
-                l.id,
-                l.lab_code,
-                l.lab_name,
-                l.building,
-                l.floor,
-                l.room_no,
-                l.lab_type,
-                l.capacity,
-                l.manager_user_id,
-                u.real_name,
-                l.open_status,
-                l.remark,
-                l.created_at,
-                l.updated_at
-            order by l.id
-            """)
     List<LabEntity> getLabs();
 
-    @Select("""
-            select
-                l.id,
-                l.lab_code as labCode,
-                l.lab_name as labName,
-                l.building,
-                l.floor,
-                l.room_no as roomNo,
-                l.lab_type as labType,
-                l.capacity,
-                l.manager_user_id as managerUserId,
-                u.real_name as managerName,
-                l.open_status as openStatus,
-                count(d.id) as deviceCount,
-                l.remark,
-                l.created_at as createdAt,
-                l.updated_at as updatedAt
-            from lab l
-            left join sys_user u on u.id = l.manager_user_id
-            left join device d on d.lab_id = l.id
-            where l.manager_user_id = #{managerUserId}
-            group by
-                l.id,
-                l.lab_code,
-                l.lab_name,
-                l.building,
-                l.floor,
-                l.room_no,
-                l.lab_type,
-                l.capacity,
-                l.manager_user_id,
-                u.real_name,
-                l.open_status,
-                l.remark,
-                l.created_at,
-                l.updated_at
-            order by l.id
-            """)
     List<LabEntity> getLabsByManagerUserId(@Param("managerUserId") Integer managerUserId);
 
     int addLab(LabEntity lab);
@@ -109,12 +34,5 @@ public interface LabMapper {
 
     int deleteLab(Integer id);
 
-    @Select("""
-        SELECT
-            id,
-            lab_name AS labName
-        FROM lab
-        ORDER BY id DESC
-    """)
     List<LabOptionVO> selectLabOptions();
 }

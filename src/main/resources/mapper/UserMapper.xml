@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="org.example.backend.mapper.UserMapper">
+
+    <sql id="UserColumns">
+        u.id,
+        u.username,
+        u.password,
+        u.real_name as realName,
+        u.phone,
+        u.email,
+        u.department,
+        u.avatar_url as avatarUrl,
+        u.status,
+        u.created_at as createdAt,
+        u.updated_at as updatedAt,
+        u.permissions,
+        r.role_code as roleCode,
+        r.role_name as roleName
+    </sql>
+
+    <select id="login" resultType="org.example.backend.entity.UserEntity">
+        select
+        <include refid="UserColumns"/>
+        from sys_user u
+        left join user_role ur on ur.user_id = u.id
+        left join role r on r.id = ur.role_id
+        where u.username = #{username}
+    </select>
+
+    <select id="profile" resultType="org.example.backend.entity.UserEntity">
+        select
+        <include refid="UserColumns"/>
+        from sys_user u
+        left join user_role ur on ur.user_id = u.id
+        left join role r on r.id = ur.role_id
+        where u.username = #{username}
+    </select>
+
+    <select id="listUsers" resultType="org.example.backend.entity.UserEntity">
+        select
+        <include refid="UserColumns"/>
+        from sys_user u
+        left join user_role ur on ur.user_id = u.id
+        left join role r on r.id = ur.role_id
+        order by u.id
+    </select>
+
+    <select id="getUser" resultType="org.example.backend.entity.UserEntity">
+        select
+        <include refid="UserColumns"/>
+        from sys_user u
+        left join user_role ur on ur.user_id = u.id
+        left join role r on r.id = ur.role_id
+        where u.id = #{id}
+    </select>
+
+    <insert id="insertUser" parameterType="org.example.backend.entity.UserEntity"
+            useGeneratedKeys="true" keyProperty="id">
+        insert into sys_user (
+            username,
+            password,
+            real_name,
+            phone,
+            email,
+            department,
+            avatar_url,
+            status,
+            permissions
+        )
+        values (
+                   #{username},
+                   #{password},
+                   #{realName},
+                   #{phone},
+                   #{email},
+                   #{department},
+                   #{avatarUrl},
+                   coalesce(#{status}, 1),
+                   #{permissions}
+               )
+    </insert>
+
+    <update id="updateUser">
+        update sys_user
+        set
+            username = #{user.username},
+            password = coalesce(nullif(#{user.password}, ''), password),
+            real_name = #{user.realName},
+            phone = #{user.phone},
+            email = #{user.email},
+            department = #{user.department},
+            avatar_url = #{user.avatarUrl},
+            status = coalesce(#{user.status}, status),
+            permissions = #{user.permissions},
+            updated_at = now()
+        where id = #{id}
+    </update>
+
+    <update id="updateUserStatus">
+        update sys_user
+        set status = #{status},
+            updated_at = now()
+        where id = #{id}
+    </update>
+
+    <update id="updatePassword">
+        update sys_user
+        set password = #{password},
+            updated_at = now()
+        where id = #{id}
+    </update>
+
+    <delete id="deleteUserRoles">
+        delete from user_role
+        where user_id = #{userId}
+    </delete>
+
+    <insert id="insertUserRole">
+        insert into user_role (
+            user_id,
+            role_id
+        )
+        select #{userId}, id
+        from role
+        where role_code = #{roleCode}
+        limit 1
+    </insert>
+
+</mapper>

@@ -3,28 +3,261 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="org.example.backend.mapper.UsageRecordMapper">
+
     <sql id="UsageRecordColumns">
         id,
-        person,
-        resource,
-        scene,
+        convert(concat('UR-', lpad(id, 4, '0')) using utf8mb4) collate utf8mb4_general_ci as recordNo,
+        convert(person using utf8mb4) collate utf8mb4_general_ci as person,
+        convert(resource using utf8mb4) collate utf8mb4_general_ci as resource,
+        convert(scene using utf8mb4) collate utf8mb4_general_ci as scene,
         use_time as useTime,
-        status,
-        remark,
+        convert(status using utf8mb4) collate utf8mb4_general_ci as status,
+        convert(remark using utf8mb4) collate utf8mb4_general_ci as remark,
+        convert('使用对象' using utf8mb4) collate utf8mb4_general_ci as role,
+        convert(scene using utf8mb4) collate utf8mb4_general_ci as type,
+        convert(resource using utf8mb4) collate utf8mb4_general_ci as lab,
+        convert('-' using utf8mb4) collate utf8mb4_general_ci as leaveTime,
+        convert('-' using utf8mb4) collate utf8mb4_general_ci as duration,
+        convert(case
+            when status = '异常' then '待管理员处理'
+            when status = '待复核' then '待管理员复核'
+            else '系统记录正常'
+        end using utf8mb4) collate utf8mb4_general_ci as accessResult,
+        convert(case
+            when status in ('异常', '待复核') then '待复核'
+            else '系统'
+        end using utf8mb4) collate utf8mb4_general_ci as reviewer,
+        convert(case
+            when status in ('异常', '待复核') then coalesce(remark, '待补充异常原因')
+            else '-'
+        end using utf8mb4) collate utf8mb4_general_ci as abnormalReason,
+        convert(remark using utf8mb4) collate utf8mb4_general_ci as note,
+        convert('台账' using utf8mb4) collate utf8mb4_general_ci as sourceType,
+        false as readonly,
         created_at as createdAt,
         updated_at as updatedAt
     </sql>
 
     <select id="listUsageRecords" resultType="org.example.backend.entity.UsageRecordEntity">
+        select *
+        from (
         select
-            <include refid="UsageRecordColumns" />
+        <include refid="UsageRecordColumns" />
         from usage_record
-        order by use_time desc, id desc
+
+        union all
+
+        select
+        -1000000000 - r.id as id,
+        convert(concat('RES-', r.id) using utf8mb4) collate utf8mb4_general_ci as recordNo,
+        convert(coalesce(r.applicant_name, '预约用户') using utf8mb4) collate utf8mb4_general_ci as person,
+        convert(case
+        when l.lab_name is null then cast(r.lab_id as char)
+        when l.lab_code is null
+        or l.lab_code = ''
+        or convert(l.lab_name using utf8mb4) collate utf8mb4_general_ci
+        like concat(convert(l.lab_code using utf8mb4) collate utf8mb4_general_ci, '%')
+        then l.lab_name
+        else concat(l.lab_code, ' ', l.lab_name)
+        end using utf8mb4) collate utf8mb4_general_ci as resource,
+        convert(coalesce(r.scene, '预约使用') using utf8mb4) collate utf8mb4_general_ci as scene,
+        case
+        when trim(substring_index(r.time_range, '-', 1)) regexp '^([01]?[0-9]|2[0-3]):[0-5][0-9]$'
+        then str_to_date(concat(r.reservation_date, ' ', trim(substring_index(r.time_range, '-', 1))), '%Y-%m-%d %H:%i')
+        else coalesce(r.updated_at, r.created_at)
+        end as useTime,
+        convert(case
+        when r.reservation_date = curdate()
+        and trim(substring_index(r.time_range, '-', 1)) regexp '^([01]?[0-9]|2[0-3]):[0-5][0-9]$'
+        and trim(substring_index(r.time_range, '-', -1)) regexp '^([01]?[0-9]|2[0-3]):[0-5][0-9]$'
+        and curtime() between str_to_date(trim(substring_index(r.time_range, '-', 1)), '%H:%i')
+        and str_to_date(trim(substring_index(r.time_range, '-', -1)), '%H:%i')
+        then '使用中'
+        else '正常'
+        end using utf8mb4) collate utf8mb4_general_ci as status,
+        convert(concat('预约审批通过，预约编号', r.id, '；', coalesce(r.reason, r.scene, '预约使用')) using utf8mb4) collate utf8mb4_general_ci as remark,
+        convert(coalesce(r.department, '预约用户') using utf8mb4) collate utf8mb4_general_ci as role,
+        convert(coalesce(r.scene, '预约使用') using utf8mb4) collate utf8mb4_general_ci as type,
+        convert(case
+        when l.lab_name is null then cast(r.lab_id as char)
+        when l.lab_code is null
+        or l.lab_code = ''
+        or convert(l.lab_name using utf8mb4) collate utf8mb4_general_ci
+        like concat(convert(l.lab_code using utf8mb4) collate utf8mb4_general_ci, '%')
+        then l.lab_name
+        else concat(l.lab_code, ' ', l.lab_name)
+        end using utf8mb4) collate utf8mb4_general_ci as lab,
+        convert(case
+        when trim(substring_index(r.time_range, '-', -1)) regexp '^([01]?[0-9]|2[0-3]):[0-5][0-9]$'
+        then date_format(str_to_date(concat(r.reservation_date, ' ', trim(substring_index(r.time_range, '-', -1))), '%Y-%m-%d %H:%i'), '%m-%d %H:%i')
+        else '-'
+        end using utf8mb4) collate utf8mb4_general_ci as leaveTime,
+        convert(coalesce(r.time_range, '-') using utf8mb4) collate utf8mb4_general_ci as duration,
+        convert('预约审核通过，已纳入实验室使用安排' using utf8mb4) collate utf8mb4_general_ci as accessResult,
+        convert(coalesce(r.reviewer_name, '系统') using utf8mb4) collate utf8mb4_general_ci as reviewer,
+        convert('-' using utf8mb4) collate utf8mb4_general_ci as abnormalReason,
+        convert(concat('来源：预约；预约编号', r.id) using utf8mb4) collate utf8mb4_general_ci as note,
+        convert('预约' using utf8mb4) collate utf8mb4_general_ci as sourceType,
+        true as readonly,
+        r.created_at as createdAt,
+        r.updated_at as updatedAt
+        from lab_reservation r
+        left join lab l on l.id = r.lab_id
+        where r.status in ('已通过', '通过', '使用中')
+        and not exists (
+        select 1
+        from usage_record ur
+        where convert(ur.remark using utf8mb4) collate utf8mb4_general_ci
+        like convert(concat('%预约编号', r.id, '%') using utf8mb4) collate utf8mb4_general_ci
+        or (
+        convert(ur.person using utf8mb4) collate utf8mb4_general_ci =
+        convert(r.applicant_name using utf8mb4) collate utf8mb4_general_ci
+        and convert(ur.scene using utf8mb4) collate utf8mb4_general_ci =
+        convert(coalesce(r.scene, '预约使用') using utf8mb4) collate utf8mb4_general_ci
+        and ur.use_time = case
+        when trim(substring_index(r.time_range, '-', 1)) regexp '^([01]?[0-9]|2[0-3]):[0-5][0-9]$'
+        then str_to_date(concat(r.reservation_date, ' ', trim(substring_index(r.time_range, '-', 1))), '%Y-%m-%d %H:%i')
+        else coalesce(r.updated_at, r.created_at)
+        end
+        )
+        )
+
+        union all
+
+        select
+        -2000000000 - t.id as id,
+        convert(concat('COURSE-', t.id) using utf8mb4) collate utf8mb4_general_ci as recordNo,
+        convert(coalesce(t.class_name, t.row_class_name, '课程班级') using utf8mb4) collate utf8mb4_general_ci as person,
+        convert(case
+        when l.lab_name is null then t.classroom
+        when l.lab_code is null
+        or l.lab_code = ''
+        or convert(l.lab_name using utf8mb4) collate utf8mb4_general_ci
+        like concat(convert(l.lab_code using utf8mb4) collate utf8mb4_general_ci, '%')
+        then l.lab_name
+        else concat(l.lab_code, ' ', l.lab_name)
+        end using utf8mb4) collate utf8mb4_general_ci as resource,
+        convert('课程上机' using utf8mb4) collate utf8mb4_general_ci as scene,
+        str_to_date(
+        concat(
+        curdate(),
+        ' ',
+        case ceil(coalesce(t.start_section, t.end_section, 0) / 2)
+        when 1 then '08:30'
+        when 2 then '10:20'
+        when 3 then '14:00'
+        when 4 then '15:50'
+        when 5 then '18:40'
+        when 6 then '20:20'
+        else '00:00'
+        end
+        ),
+        '%Y-%m-%d %H:%i'
+        ) as useTime,
+        convert(case
+        when case ceil(coalesce(t.start_section, t.end_section, 0) / 2)
+        when 1 then '08:30:00'
+        when 2 then '10:20:00'
+        when 3 then '14:00:00'
+        when 4 then '15:50:00'
+        when 5 then '18:40:00'
+        when 6 then '20:20:00'
+        else '23:59:59'
+        end &lt;= curtime()
+        and case ceil(coalesce(t.end_section, t.start_section, 0) / 2)
+        when 1 then '10:00:00'
+        when 2 then '11:50:00'
+        when 3 then '15:30:00'
+        when 4 then '17:20:00'
+        when 5 then '20:10:00'
+        when 6 then '21:50:00'
+        else '00:00:00'
+        end &gt;= curtime()
+        then '使用中'
+        else '正常'
+        end using utf8mb4) collate utf8mb4_general_ci as status,
+        convert(concat('课程：', coalesce(t.course_name, '-'), '；教师：', coalesce(t.teacher, '-'), '；教室：', coalesce(t.classroom, '-')) using utf8mb4) collate utf8mb4_general_ci as remark,
+        convert('课程班级' using utf8mb4) collate utf8mb4_general_ci as role,
+        convert('课程上机' using utf8mb4) collate utf8mb4_general_ci as type,
+        convert(case
+        when l.lab_name is null then t.classroom
+        when l.lab_code is null
+        or l.lab_code = ''
+        or convert(l.lab_name using utf8mb4) collate utf8mb4_general_ci
+        like concat(convert(l.lab_code using utf8mb4) collate utf8mb4_general_ci, '%')
+        then l.lab_name
+        else concat(l.lab_code, ' ', l.lab_name)
+        end using utf8mb4) collate utf8mb4_general_ci as lab,
+        convert(date_format(
+        str_to_date(
+        concat(
+        curdate(),
+        ' ',
+        case ceil(coalesce(t.end_section, t.start_section, 0) / 2)
+        when 1 then '10:00'
+        when 2 then '11:50'
+        when 3 then '15:30'
+        when 4 then '17:20'
+        when 5 then '20:10'
+        when 6 then '21:50'
+        else '00:00'
+        end
+        ),
+        '%Y-%m-%d %H:%i'
+        ),
+        '%m-%d %H:%i'
+        ) using utf8mb4) collate utf8mb4_general_ci as leaveTime,
+        convert(coalesce(t.section_text, '-') using utf8mb4) collate utf8mb4_general_ci as duration,
+        convert('课表匹配，已纳入实验室使用安排' using utf8mb4) collate utf8mb4_general_ci as accessResult,
+        convert('系统' using utf8mb4) collate utf8mb4_general_ci as reviewer,
+        convert('-' using utf8mb4) collate utf8mb4_general_ci as abnormalReason,
+        convert(concat('来源：课表；课程：', coalesce(t.course_name, '-'), '；教师：', coalesce(t.teacher, '-')) using utf8mb4) collate utf8mb4_general_ci as note,
+        convert('课表' using utf8mb4) collate utf8mb4_general_ci as sourceType,
+        true as readonly,
+        t.create_time as createdAt,
+        t.create_time as updatedAt
+        from class_timetable t
+        join lab l on (
+        (
+        nullif(l.lab_code, '') is not null
+        and regexp_like(
+        convert(t.classroom using utf8mb4) collate utf8mb4_general_ci,
+        concat(
+        '(^|[^0-9A-Za-z])',
+        replace(convert(l.lab_code using utf8mb4) collate utf8mb4_general_ci, '-', '[-]'),
+        '[A-Za-z]?([^0-9A-Za-z]|$)'
+        )
+        )
+        )
+        or (
+        nullif(l.lab_name, '') is not null
+        and locate(
+        convert(l.lab_name using utf8mb4) collate utf8mb4_general_ci,
+        convert(t.classroom using utf8mb4) collate utf8mb4_general_ci
+        ) &gt; 0
+        )
+        )
+        where find_in_set(
+        convert(cast(least(25, greatest(1, floor(datediff(curdate(), '2026-03-02') / 7) + 1)) as char) using utf8mb4) collate utf8mb4_general_ci,
+        convert(t.week_expanded using utf8mb4) collate utf8mb4_general_ci
+        ) &gt; 0
+        and convert(t.weekday using utf8mb4) collate utf8mb4_general_ci =
+        convert(case dayofweek(curdate())
+        when 1 then '星期日'
+        when 2 then '星期一'
+        when 3 then '星期二'
+        when 4 then '星期三'
+        when 5 then '星期四'
+        when 6 then '星期五'
+        when 7 then '星期六'
+        end using utf8mb4) collate utf8mb4_general_ci
+        ) usageRecords
+        order by useTime desc, id desc
     </select>
 
     <select id="getUsageRecord" resultType="org.example.backend.entity.UsageRecordEntity">
         select
-            <include refid="UsageRecordColumns" />
+        <include refid="UsageRecordColumns" />
         from usage_record
         where id = #{id}
     </select>
@@ -37,9 +270,12 @@
     <select id="countUsageRecordBySignature" resultType="int">
         select count(1)
         from usage_record
-        where person = #{person}
-          and resource = #{resource}
-          and scene = #{scene}
+        where convert(person using utf8mb4) collate utf8mb4_general_ci =
+              convert(cast(#{person} as char) using utf8mb4) collate utf8mb4_general_ci
+          and convert(resource using utf8mb4) collate utf8mb4_general_ci =
+              convert(cast(#{resource} as char) using utf8mb4) collate utf8mb4_general_ci
+          and convert(scene using utf8mb4) collate utf8mb4_general_ci =
+              convert(cast(#{scene} as char) using utf8mb4) collate utf8mb4_general_ci
           and use_time = #{useTime}
     </select>
 

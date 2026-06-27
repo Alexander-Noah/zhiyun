@@ -83,7 +83,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String token = resolveToken(request);
         if (token.isBlank()) {
-            writeUnauthorized(response, "Unauthorized or session expired");
+            writeUnauthorized(response, "未授权或会话已过期");
             return;
         }
 
@@ -94,7 +94,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             request.setAttribute(AUTH_USER_ID_ATTRIBUTE, claims.userId());
             filterChain.doFilter(request, response);
         } catch (IllegalArgumentException exception) {
-            writeUnauthorized(response, "Invalid session, please login again");
+            writeUnauthorized(response, "会话无效，请重新登录");
         }
     }
 

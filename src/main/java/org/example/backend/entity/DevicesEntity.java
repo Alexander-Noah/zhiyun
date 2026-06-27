@@ -1,62 +1,54 @@
 package org.example.backend.entity;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
-import lombok.Data;
 
 import java.time.LocalDateTime;
 
 public class DevicesEntity {
     private Long id;
-    @JsonAlias("code")
+
+    @JsonAlias({"assetNo", "asset_no", "code"})
     private String deviceCode;
-    @JsonAlias("name")
+
+    @JsonAlias({"deviceName", "device_name", "name"})
     private String deviceName;
+
     private String category;
     private Long labId;
-    @JsonAlias("lab")
+
+    @JsonAlias({"labName", "lab_name", "lab"})
     private String labName;
+
+    @JsonAlias({"roomNo", "room_no", "location"})
     private String location;
+
     private Long ownerUserId;
+
     @JsonAlias({"owner", "ownerName"})
     private String ownerUsername;
+
+    private Integer quantity;
+    private String unit;
     private String status;
     private String health;
     private Boolean online;
+
+    @JsonAlias({"specification", "specs"})
     private String specs;
+
+    @JsonAlias({"standardRequirement", "standard_requirement"})
+    private String standardRequirement;
+
+    private String remark;
+    private String sourceType;
     private String purchaseDate;
     private String inventoryDate;
-    @JsonAlias("warranty")
     private String warrantyDate;
     private Integer usageHours;
     private String maintenance;
+    private Integer deleted;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-
-    public DevicesEntity() {
-    }
-
-    public DevicesEntity(Long id, String deviceCode, String deviceName, String category, Long labId, String labName, String location, Long ownerUserId, String ownerUsername, String status, String health, Boolean online, String specs, String purchaseDate, String inventoryDate, String warrantyDate, Integer usageHours, String maintenance, LocalDateTime createdAt, LocalDateTime updatedAt) {
-        this.id = id;
-        this.deviceCode = deviceCode;
-        this.deviceName = deviceName;
-        this.category = category;
-        this.labId = labId;
-        this.labName = labName;
-        this.location = location;
-        this.ownerUserId = ownerUserId;
-        this.ownerUsername = ownerUsername;
-        this.status = status;
-        this.health = health;
-        this.online = online;
-        this.specs = specs;
-        this.purchaseDate = purchaseDate;
-        this.inventoryDate = inventoryDate;
-        this.warrantyDate = warrantyDate;
-        this.usageHours = usageHours;
-        this.maintenance = maintenance;
-        this.createdAt = createdAt;
-        this.updatedAt = updatedAt;
-    }
 
     public Long getId() {
         return id;
@@ -74,12 +66,36 @@ public class DevicesEntity {
         this.deviceCode = deviceCode;
     }
 
+    public String getAssetNo() {
+        return deviceCode;
+    }
+
+    public void setAssetNo(String assetNo) {
+        this.deviceCode = assetNo;
+    }
+
+    public String getCode() {
+        return deviceCode;
+    }
+
+    public void setCode(String code) {
+        this.deviceCode = code;
+    }
+
     public String getDeviceName() {
         return deviceName;
     }
 
     public void setDeviceName(String deviceName) {
         this.deviceName = deviceName;
+    }
+
+    public String getName() {
+        return deviceName;
+    }
+
+    public void setName(String name) {
+        this.deviceName = name;
     }
 
     public String getCategory() {
@@ -106,12 +122,28 @@ public class DevicesEntity {
         this.labName = labName;
     }
 
+    public String getLab() {
+        return labName;
+    }
+
+    public void setLab(String lab) {
+        this.labName = lab;
+    }
+
     public String getLocation() {
         return location;
     }
 
     public void setLocation(String location) {
         this.location = location;
+    }
+
+    public String getRoomNo() {
+        return location;
+    }
+
+    public void setRoomNo(String roomNo) {
+        this.location = roomNo;
     }
 
     public Long getOwnerUserId() {
@@ -128,6 +160,22 @@ public class DevicesEntity {
 
     public void setOwnerUsername(String ownerUsername) {
         this.ownerUsername = ownerUsername;
+    }
+
+    public Integer getQuantity() {
+        return quantity;
+    }
+
+    public void setQuantity(Integer quantity) {
+        this.quantity = quantity;
+    }
+
+    public String getUnit() {
+        return unit;
+    }
+
+    public void setUnit(String unit) {
+        this.unit = unit;
     }
 
     public String getStatus() {
@@ -160,6 +208,38 @@ public class DevicesEntity {
 
     public void setSpecs(String specs) {
         this.specs = specs;
+    }
+
+    public String getSpecification() {
+        return specs;
+    }
+
+    public void setSpecification(String specification) {
+        this.specs = specification;
+    }
+
+    public String getStandardRequirement() {
+        return standardRequirement;
+    }
+
+    public void setStandardRequirement(String standardRequirement) {
+        this.standardRequirement = standardRequirement;
+    }
+
+    public String getRemark() {
+        return remark;
+    }
+
+    public void setRemark(String remark) {
+        this.remark = remark;
+    }
+
+    public String getSourceType() {
+        return sourceType;
+    }
+
+    public void setSourceType(String sourceType) {
+        this.sourceType = sourceType;
     }
 
     public String getPurchaseDate() {
@@ -202,6 +282,14 @@ public class DevicesEntity {
         this.maintenance = maintenance;
     }
 
+    public Integer getDeleted() {
+        return deleted;
+    }
+
+    public void setDeleted(Integer deleted) {
+        this.deleted = deleted;
+    }
+
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
@@ -216,31 +304,5 @@ public class DevicesEntity {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
-    }
-
-    @Override
-    public String toString() {
-        return "DevicesEntity{" +
-                "id=" + id +
-                ", deviceCode='" + deviceCode + '\'' +
-                ", deviceName='" + deviceName + '\'' +
-                ", category='" + category + '\'' +
-                ", labId=" + labId +
-                ", labName='" + labName + '\'' +
-                ", location='" + location + '\'' +
-                ", ownerUserId=" + ownerUserId +
-                ", ownerUsername='" + ownerUsername + '\'' +
-                ", status='" + status + '\'' +
-                ", health='" + health + '\'' +
-                ", online=" + online +
-                ", specs='" + specs + '\'' +
-                ", purchaseDate='" + purchaseDate + '\'' +
-                ", inventoryDate='" + inventoryDate + '\'' +
-                ", warrantyDate='" + warrantyDate + '\'' +
-                ", usageHours=" + usageHours +
-                ", maintenance='" + maintenance + '\'' +
-                ", createdAt=" + createdAt +
-                ", updatedAt=" + updatedAt +
-                '}';
     }
 }
