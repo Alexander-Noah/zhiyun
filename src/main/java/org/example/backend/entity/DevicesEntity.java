@@ -29,8 +29,11 @@ public class DevicesEntity {
 
     private Integer quantity;
     private String unit;
+    // Asset lifecycle status only. Runtime online/health data belongs to device_runtime_status.
     private String status;
+    // Legacy compatibility field. Keep returning it for old /devices consumers during migration.
     private String health;
+    // Legacy compatibility field. Keep returning it for old /devices consumers during migration.
     private Boolean online;
 
     @JsonAlias({"specification", "specs"})
