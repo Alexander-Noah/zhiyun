@@ -1,16 +1,20 @@
 package org.example.backend.controller;
 
 import org.example.backend.result.Result;
+import org.example.backend.service.IotDeviceService;
 import org.example.backend.service.IotHardwareService;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Collections;
@@ -20,9 +24,11 @@ import java.util.Map;
 @RestController
 public class IotHardwareController {
     private final IotHardwareService iotHardwareService;
+    private final IotDeviceService iotDeviceService;
 
-    public IotHardwareController(IotHardwareService iotHardwareService) {
+    public IotHardwareController(IotHardwareService iotHardwareService, IotDeviceService iotDeviceService) {
         this.iotHardwareService = iotHardwareService;
+        this.iotDeviceService = iotDeviceService;
     }
 
     @GetMapping("/iot/hardware")
@@ -37,7 +43,48 @@ public class IotHardwareController {
 
     @GetMapping("/iot/labs/{labId:\\d+}/devices")
     public Result listLabDevices(@PathVariable Long labId) {
-        return Result.success("获取实验室物联网设备成功", iotHardwareService.getLabDevices(labId));
+        return Result.success("获取实验室物联设备成功", iotDeviceService.listLabDevices(labId));
+    }
+
+    @GetMapping("/iot/devices")
+    public Result listIotDevices(@RequestParam(required = false) Map<String, String> query) {
+        return Result.success("获取物联设备列表成功", iotDeviceService.listDevices(query == null ? Map.of() : query));
+    }
+
+    @GetMapping("/iot/labs/{labId:\\d+}/overview")
+    public Result getLabIotOverview(@PathVariable Long labId) {
+        return Result.success("获取实验室物联概览成功", iotDeviceService.getLabOverview(labId));
+    }
+
+    @PostMapping("/iot/devices")
+    public Result createIotDevice(@RequestBody(required = false) Map<String, Object> payload) {
+        return Result.success("新增物联设备成功", iotDeviceService.createDevice(payload == null ? Map.of() : payload));
+    }
+
+    @PutMapping("/iot/devices/{id:\\d+}")
+    public Result updateIotDevice(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> payload) {
+        return Result.success("更新物联设备成功", iotDeviceService.updateDevice(id, payload == null ? Map.of() : payload));
+    }
+
+    @DeleteMapping("/iot/devices/{id:\\d+}")
+    public Result deleteIotDevice(@PathVariable Long id) {
+        iotDeviceService.deleteDevice(id);
+        return Result.success("删除物联设备成功");
+    }
+
+    @PostMapping("/iot/control")
+    public Result controlIotDevice(@RequestBody(required = false) Map<String, Object> payload) {
+        return Result.success("物联控制命令已记录", iotDeviceService.control(payload == null ? Map.of() : payload));
+    }
+
+    @GetMapping("/iot/command-logs")
+    public Result listCommandLogs(@RequestParam(required = false) Map<String, String> query) {
+        return Result.success("获取物联控制日志成功", iotDeviceService.listCommandLogs(query == null ? Map.of() : query));
+    }
+
+    @GetMapping("/iot/environment/{labId:\\d+}")
+    public Result getEnvironment(@PathVariable Long labId) {
+        return Result.success("获取实验室环境感知数据成功", iotDeviceService.getEnvironment(labId));
     }
 
     @GetMapping("/iot/labs/{labId:\\d+}/status")
