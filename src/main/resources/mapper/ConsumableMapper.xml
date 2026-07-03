@@ -3,6 +3,31 @@
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="org.example.backend.mapper.ConsumableMapper">
+    <update id="createStockRecordTableIfNotExists">
+        create table if not exists consumable_stock_record (
+            id bigint primary key auto_increment,
+            consumable_id bigint not null,
+            consumable_name varchar(100) not null,
+            category varchar(50),
+            movement_type varchar(20) not null,
+            quantity int not null,
+            unit varchar(20),
+            before_stock int not null,
+            after_stock int not null,
+            operator_name varchar(100),
+            source_target varchar(160),
+            reason varchar(255),
+            remark text,
+            operated_at datetime not null default current_timestamp,
+            created_at datetime default current_timestamp,
+            index idx_consumable_stock_record_consumable_id (consumable_id),
+            index idx_consumable_stock_record_operated_at (operated_at),
+            constraint fk_consumable_stock_record_consumable
+                foreign key (consumable_id) references consumable_inventory(id)
+                on delete cascade
+        ) engine=InnoDB default charset=utf8mb4
+    </update>
+
     <select id="listConsumables" resultType="org.example.backend.entity.ConsumableEntity">
         select
             id,
@@ -80,6 +105,15 @@
         where id = #{id}
     </update>
 
+    <update id="updateConsumableStock">
+        update consumable_inventory
+        set stock = #{stock},
+            status = #{status},
+            tag_type = #{tagType},
+            updated_at = now()
+        where id = #{id}
+    </update>
+
     <delete id="deleteConsumable">
         delete from consumable_inventory
         where id = #{id}
@@ -88,4 +122,66 @@
     <delete id="deleteAllConsumables">
         delete from consumable_inventory
     </delete>
+
+    <insert id="insertStockRecord" useGeneratedKeys="true" keyProperty="id">
+        insert into consumable_stock_record (
+            consumable_id,
+            consumable_name,
+            category,
+            movement_type,
+            quantity,
+            unit,
+            before_stock,
+            after_stock,
+            operator_name,
+            source_target,
+            reason,
+            remark,
+            operated_at
+        ) values (
+            #{consumableId},
+            #{consumableName},
+            #{category},
+            #{type},
+            #{quantity},
+            #{unit},
+            #{beforeStock},
+            #{afterStock},
+            #{operator},
+            #{source},
+            #{reason},
+            #{remark},
+            coalesce(nullif(#{time}, ''), now())
+        )
+    </insert>
+
+    <sql id="StockRecordColumns">
+        id,
+        consumable_id as consumableId,
+        consumable_name as consumableName,
+        category,
+        movement_type as type,
+        quantity,
+        unit,
+        before_stock as beforeStock,
+        after_stock as afterStock,
+        operator_name as operator,
+        source_target as source,
+        reason,
+        remark,
+        date_format(operated_at, '%Y-%m-%d %H:%i:%s') as time,
+        created_at as createdAt
+    </sql>
+
+    <select id="listStockRecords" resultType="org.example.backend.entity.ConsumableStockRecordEntity">
+        select
+            <include refid="StockRecordColumns" />
+        from consumable_stock_record
+        <where>
+            <if test="consumableId != null">
+                consumable_id = #{consumableId}
+            </if>
+        </where>
+        order by operated_at desc, id desc
+    </select>
 </mapper>

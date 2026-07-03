@@ -154,8 +154,6 @@ public class BusinessLoopServiceImpl implements BusinessLoopService {
             updateDeviceState(
                     repair,
                     STATUS_NORMAL,
-                    HEALTH_GOOD,
-                    true,
                     "维修完成：" + firstNonBlank(repair.getResult(), repair.getTicket())
             );
             return;
@@ -165,8 +163,6 @@ public class BusinessLoopServiceImpl implements BusinessLoopService {
             updateDeviceState(
                     repair,
                     STATUS_MAINTENANCE,
-                    HEALTH_ATTENTION,
-                    true,
                     "维修处理中：" + firstNonBlank(repair.getResult(), repair.getTicket())
             );
             return;
@@ -175,8 +171,6 @@ public class BusinessLoopServiceImpl implements BusinessLoopService {
         updateDeviceState(
                 repair,
                 STATUS_FAULT,
-                HEALTH_RISK,
-                false,
                 "故障报修：" + firstNonBlank(repair.getDescription(), repair.getTicket())
         );
     }
@@ -217,22 +211,17 @@ public class BusinessLoopServiceImpl implements BusinessLoopService {
     private void updateDeviceState(
             RepairEntity repair,
             String status,
-            String health,
-            boolean online,
             String maintenance
     ) {
-        int updated = devicesMapper.updateDeviceRuntimeStateByNameOrCode(
+        int updated = devicesMapper.updateDeviceAssetMaintenanceStateByNameOrCode(
                 repair.getDevice(),
                 status,
-                health,
-                online,
                 maintenance
         );
 
         if (updated > 0) {
             recordEvent("repair", "device-sync", repair.getDevice(), status, Map.of(
-                    "ticket", firstNonBlank(repair.getTicket(), repair.getId()),
-                    "health", health
+                    "ticket", firstNonBlank(repair.getTicket(), repair.getId())
             ));
         }
     }

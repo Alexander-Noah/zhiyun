@@ -17,19 +17,35 @@ import java.util.Map;
 public class JwtService {
     private static final String HMAC_ALGORITHM = "HmacSHA256";
     private static final String TOKEN_TYPE = "JWT";
+    private static final String DEVELOPMENT_SECRET_MARKER = "change-in-" + "production";
+    private static final int MIN_SECRET_LENGTH = 32;
 
     private final byte[] secret;
     private final long expirationSeconds;
     private final String issuer;
 
     public JwtService(
-            @Value("${smart-lab.security.jwt.secret:smart-lab-dev-jwt-secret-change-in-production-2026}") String secret,
+            @Value("${smart-lab.security.jwt.secret:}") String secret,
             @Value("${smart-lab.security.jwt.expiration-seconds:7200}") long expirationSeconds,
             @Value("${smart-lab.security.jwt.issuer:smart-lab}") String issuer
     ) {
-        this.secret = secret.getBytes(StandardCharsets.UTF_8);
+        this.secret = requireStrongSecret(secret).getBytes(StandardCharsets.UTF_8);
         this.expirationSeconds = Math.max(expirationSeconds, 300);
         this.issuer = issuer == null ? "" : issuer.trim();
+    }
+
+    private String requireStrongSecret(String value) {
+        String secretValue = value == null ? "" : value.trim();
+        if (secretValue.isBlank()) {
+            throw new IllegalStateException("SMART_LAB_JWT_SECRET must be configured");
+        }
+        if (secretValue.toLowerCase().contains(DEVELOPMENT_SECRET_MARKER)) {
+            throw new IllegalStateException("SMART_LAB_JWT_SECRET must not use the development default");
+        }
+        if (secretValue.length() < MIN_SECRET_LENGTH) {
+            throw new IllegalStateException("SMART_LAB_JWT_SECRET must be at least 32 characters");
+        }
+        return secretValue;
     }
 
     public String generateToken(UserEntity user) {

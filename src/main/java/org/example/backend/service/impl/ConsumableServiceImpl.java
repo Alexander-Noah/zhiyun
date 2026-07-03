@@ -1,6 +1,7 @@
 package org.example.backend.service.impl;
 
 import org.example.backend.entity.ConsumableEntity;
+import org.example.backend.entity.ConsumableStockRecordEntity;
 import org.example.backend.entity.NoticeEntity;
 import org.example.backend.mapper.ConsumableMapper;
 import org.example.backend.mapper.NoticeMapper;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -17,6 +19,10 @@ import java.util.Map;
 
 @Service
 public class ConsumableServiceImpl implements ConsumableService {
+    private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final String MOVEMENT_IN = "入库";
+    private static final String MOVEMENT_OUT = "出库";
+
     private final ConsumableMapper consumableMapper;
     private final NoticeMapper noticeMapper;
     private final BusinessLoopService businessLoopService;
@@ -84,6 +90,60 @@ public class ConsumableServiceImpl implements ConsumableService {
         }
         businessLoopService.recordEvent("consumable", "reset", "耗材库存", "已恢复初始库存", Map.of("count", getDefaultConsumables().size()));
         return consumableMapper.listConsumables();
+    }
+
+    @Override
+    public List<ConsumableStockRecordEntity> listStockRecords(Long consumableId) {
+        consumableMapper.createStockRecordTableIfNotExists();
+        List<ConsumableStockRecordEntity> records = consumableMapper.listStockRecords(consumableId);
+        return records == null ? List.of() : records;
+    }
+
+    @Override
+    @Transactional
+    public ConsumableMovementResult recordConsumableMovement(Long id, ConsumableStockRecordEntity record) {
+        consumableMapper.createStockRecordTableIfNotExists();
+        ConsumableEntity consumable = requireConsumable(id);
+        ConsumableStockRecordEntity movement = record == null ? new ConsumableStockRecordEntity() : record;
+
+        int quantity = movement.getQuantity() == null ? 0 : movement.getQuantity();
+        if (quantity <= 0) {
+            throw new IllegalArgumentException("Movement quantity must be greater than 0");
+        }
+
+        String type = normalizeMovementType(movement.getType());
+        int beforeStock = consumable.getStock() == null ? 0 : Math.max(consumable.getStock(), 0);
+        int afterStock = MOVEMENT_IN.equals(type) ? beforeStock + quantity : beforeStock - quantity;
+        if (afterStock < 0) {
+            throw new IllegalArgumentException("Outbound quantity cannot exceed current stock");
+        }
+
+        consumable.setStock(afterStock);
+        applyStockStatus(consumable);
+        int updated = consumableMapper.updateConsumableStock(id, afterStock, consumable.getStatus(), consumable.getTagType());
+        if (updated == 0) {
+            throw new IllegalArgumentException("Consumable not found");
+        }
+
+        movement.setConsumableId(consumable.getId());
+        movement.setConsumableName(consumable.getName());
+        movement.setCategory(consumable.getCategory());
+        movement.setType(type);
+        movement.setQuantity(quantity);
+        movement.setUnit(textOrDefault(movement.getUnit(), consumable.getUnit()));
+        movement.setBeforeStock(beforeStock);
+        movement.setAfterStock(afterStock);
+        movement.setOperator(textOrDefault(movement.getOperator(), "system"));
+        movement.setSource(textOrDefault(movement.getSource(), "-"));
+        movement.setReason(textOrDefault(movement.getReason(), "-"));
+        movement.setRemark(textOrDefault(movement.getRemark(), ""));
+        movement.setTime(LocalDateTime.now().format(DATE_TIME_FORMATTER));
+        consumableMapper.insertStockRecord(movement);
+
+        ConsumableEntity savedConsumable = consumableMapper.getConsumable(id);
+        closeLoopAfterStockChanged(savedConsumable, MOVEMENT_IN.equals(type) ? "stock-in" : "stock-out");
+        List<ConsumableStockRecordEntity> records = consumableMapper.listStockRecords(null);
+        return new ConsumableMovementResult(savedConsumable, movement, records == null ? List.of() : records);
     }
 
     private ConsumableEntity normalizeConsumable(ConsumableEntity consumable) {
@@ -167,6 +227,33 @@ public class ConsumableServiceImpl implements ConsumableService {
         consumable.setLocation(location);
         consumable.setWarnThreshold(warnThreshold);
         return consumable;
+    }
+
+    private ConsumableEntity requireConsumable(Long id) {
+        if (id == null) {
+            throw new IllegalArgumentException("Consumable id is required");
+        }
+        ConsumableEntity consumable = consumableMapper.getConsumable(id);
+        if (consumable == null) {
+            throw new IllegalArgumentException("Consumable not found");
+        }
+        return consumable;
+    }
+
+    private String normalizeMovementType(String type) {
+        String rawValue = type == null ? "" : type.trim();
+        String value = rawValue.toLowerCase();
+        if ("in".equals(value) || "stock-in".equals(value) || MOVEMENT_IN.equals(rawValue)) {
+            return MOVEMENT_IN;
+        }
+        if ("out".equals(value) || "stock-out".equals(value) || MOVEMENT_OUT.equals(rawValue)) {
+            return MOVEMENT_OUT;
+        }
+        throw new IllegalArgumentException("Movement type must be in or out");
+    }
+
+    private String textOrDefault(String value, String defaultValue) {
+        return isBlank(value) ? defaultValue : value.trim();
     }
 
     private boolean isBlank(String value) {

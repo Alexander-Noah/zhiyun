@@ -52,7 +52,7 @@ public class ClassTimetableServiceImpl implements ClassTimetableService {
     private static final String CRAWLER_CONFIG_KEY = "lab-admin-class-timetable";
     private static final String DEFAULT_CRON = "0 0 */6 * * *";
     private static final String DEFAULT_SEMESTER_START_DATE = "2026-03-02";
-    private static final String DEFAULT_SECRET = "zhiyun-lab-timetable-dev-secret-change-me";
+    private static final int MIN_SECRET_LENGTH = 32;
 
     private final SecureRandom secureRandom = new SecureRandom();
     private final ClassTimetableMapper classTimetableMapper;
@@ -72,7 +72,21 @@ public class ClassTimetableServiceImpl implements ClassTimetableService {
         this.classTimetableMapper = classTimetableMapper;
         this.environment = environment;
         this.taskScheduler = classTimetableTaskScheduler;
-        this.secretKey = buildSecretKey(isBlank(secret) ? DEFAULT_SECRET : secret);
+        this.secretKey = buildSecretKey(requireStrongSecret(secret, "timetable.crawler.credential-secret"));
+    }
+
+    private String requireStrongSecret(String value, String name) {
+        String secret = value == null ? "" : value.trim();
+        if (secret.isBlank()) {
+            throw new IllegalStateException(name + " must be configured");
+        }
+        if (secret.toLowerCase().contains("change-me") || secret.toLowerCase().contains("dev-secret")) {
+            throw new IllegalStateException(name + " must not use the development default");
+        }
+        if (secret.length() < MIN_SECRET_LENGTH) {
+            throw new IllegalStateException(name + " must be at least 32 characters");
+        }
+        return secret;
     }
 
     @PostConstruct

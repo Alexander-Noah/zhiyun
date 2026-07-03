@@ -1,8 +1,6 @@
 package org.example.backend.service.impl;
 
 import org.example.backend.config.IotHardwareProperties;
-import org.example.backend.entity.DevicesEntity;
-import org.example.backend.mapper.DevicesMapper;
 import org.example.backend.service.BusinessLoopService;
 import org.example.backend.service.IotHardwareService;
 import org.springframework.stereotype.Service;
@@ -32,13 +30,11 @@ import java.util.Set;
 public class IotHardwareServiceImpl implements IotHardwareService {
     private final IotHardwareProperties properties;
     private final BusinessLoopService businessLoopService;
-    private final DevicesMapper devicesMapper;
     private final HttpClient httpClient;
 
-    public IotHardwareServiceImpl(IotHardwareProperties properties, BusinessLoopService businessLoopService, DevicesMapper devicesMapper) {
+    public IotHardwareServiceImpl(IotHardwareProperties properties, BusinessLoopService businessLoopService) {
         this.properties = properties;
         this.businessLoopService = businessLoopService;
-        this.devicesMapper = devicesMapper;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(properties.getTimeout())
                 .build();
@@ -64,46 +60,6 @@ public class IotHardwareServiceImpl implements IotHardwareService {
         return properties.getDevices().stream()
                 .map(this::sanitizeDevice)
                 .toList();
-    }
-
-    @Override
-    public Map<String, Object> getLabDevices(Long labId) {
-        List<DevicesEntity> ledgerDevices = Optional.ofNullable(devicesMapper.getDevices())
-                .orElse(List.of())
-                .stream()
-                .filter(device -> Objects.equals(device.getLabId(), labId))
-                .toList();
-        Map<String, IotHardwareProperties.HardwareDevice> hardwareByCode = new LinkedHashMap<>();
-        properties.getDevices().stream()
-                .filter(device -> Objects.equals(device.getLabId(), labId))
-                .forEach(device -> hardwareByCode.put(valueOrEmpty(device.getCode()), device));
-
-        List<Map<String, Object>> boundDevices = new ArrayList<>();
-        for (DevicesEntity ledgerDevice : ledgerDevices) {
-            String code = valueOrEmpty(ledgerDevice.getDeviceCode());
-            IotHardwareProperties.HardwareDevice hardwareDevice = hardwareByCode.remove(code);
-            boundDevices.add(createBoundDevice(ledgerDevice, hardwareDevice, labId));
-        }
-
-        for (IotHardwareProperties.HardwareDevice hardwareDevice : hardwareByCode.values()) {
-            boundDevices.add(createBoundDevice(null, hardwareDevice, labId));
-        }
-
-        Set<String> categories = boundDevices.stream()
-                .map(device -> String.valueOf(device.get("category")))
-                .filter(StringUtils::hasText)
-                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
-        long onlineCount = boundDevices.stream().filter(device -> Boolean.TRUE.equals(device.get("online"))).count();
-        long configuredCount = boundDevices.stream().filter(device -> Boolean.TRUE.equals(device.get("configured"))).count();
-
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("labId", labId);
-        result.put("total", boundDevices.size());
-        result.put("onlineCount", onlineCount);
-        result.put("configuredCount", configuredCount);
-        result.put("categories", categories);
-        result.put("devices", boundDevices);
-        return result;
     }
 
     @Override
@@ -207,55 +163,6 @@ public class IotHardwareServiceImpl implements IotHardwareService {
                 .orElse("image/jpeg");
 
         return new CameraSnapshot(result.bodyBytes(), contentType);
-    }
-
-    private Map<String, Object> createBoundDevice(DevicesEntity ledgerDevice, IotHardwareProperties.HardwareDevice hardwareDevice, Long labId) {
-        String code = firstNonBlank(
-                ledgerDevice == null ? "" : ledgerDevice.getDeviceCode(),
-                hardwareDevice == null ? "" : hardwareDevice.getCode()
-        );
-        String name = firstNonBlank(
-                ledgerDevice == null ? "" : ledgerDevice.getDeviceName(),
-                hardwareDevice == null ? "" : hardwareDevice.getName(),
-                code
-        );
-        String category = firstNonBlank(
-                ledgerDevice == null ? "" : ledgerDevice.getCategory(),
-                hardwareDevice == null ? "" : hardwareDevice.getType(),
-                "未分类设备"
-        );
-        String type = normalizeType(firstNonBlank(
-                hardwareDevice == null ? "" : hardwareDevice.getType(),
-                category
-        ));
-        boolean configured = hardwareDevice != null;
-        boolean online = ledgerDevice == null || ledgerDevice.getOnline() == null || Boolean.TRUE.equals(ledgerDevice.getOnline());
-        String status = firstNonBlank(
-                ledgerDevice == null ? "" : ledgerDevice.getStatus(),
-                configured ? "已配置" : "未配置",
-                online ? "正常" : "离线"
-        );
-
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("id", ledgerDevice == null ? null : ledgerDevice.getId());
-        result.put("code", code);
-        result.put("name", name);
-        result.put("type", type);
-        result.put("category", category);
-        result.put("labId", labId);
-        result.put("labCode", hardwareDevice == null ? "" : valueOrEmpty(hardwareDevice.getLabCode()));
-        result.put("labName", ledgerDevice == null ? "" : valueOrEmpty(ledgerDevice.getLabName()));
-        result.put("location", ledgerDevice == null ? "" : valueOrEmpty(ledgerDevice.getLocation()));
-        result.put("owner", ledgerDevice == null ? "" : valueOrEmpty(ledgerDevice.getOwnerUsername()));
-        result.put("status", status);
-        result.put("health", ledgerDevice == null ? "" : valueOrEmpty(ledgerDevice.getHealth()));
-        result.put("online", online);
-        result.put("configured", configured);
-        result.put("protocol", hardwareDevice == null ? "" : firstNonBlank(hardwareDevice.getProtocol(), "http"));
-        result.put("streamUrl", hardwareDevice == null ? "" : valueOrEmpty(firstNonBlank(hardwareDevice.getHlsUrl(), hardwareDevice.getWebrtcUrl(), hardwareDevice.getFlvUrl(), hardwareDevice.getStreamUrl())));
-        result.put("snapshotProxyUrl", hardwareDevice != null && StringUtils.hasText(hardwareDevice.getSnapshotUrl()) ? "/iot/cameras/" + hardwareDevice.getCode() + "/snapshot" : "");
-        result.put("capabilities", buildCapabilities(type, hardwareDevice));
-        return result;
     }
 
     private List<Map<String, Object>> buildCapabilities(String type, IotHardwareProperties.HardwareDevice device) {

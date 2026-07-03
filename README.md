@@ -97,9 +97,9 @@ server:
 
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/smart_lab_basic
-    username: root
-    password: root
+    url: ${SMART_LAB_DB_URL:jdbc:mysql://localhost:3306/smart_lab_basic}
+    username: ${SMART_LAB_DB_USERNAME:root}
+    password: ${SMART_LAB_DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
 mybatis:
@@ -739,7 +739,7 @@ smart-lab:
   security:
     jwt:
       enabled: true
-      secret: ${SMART_LAB_JWT_SECRET:smart-lab-dev-jwt-secret-change-in-production-2026}
+      secret: ${SMART_LAB_JWT_SECRET:}
       expiration-seconds: 7200
 ```
 
@@ -1476,9 +1476,9 @@ CREATE DATABASE smart_lab_basic CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
 ```yaml
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/smart_lab_basic
-    username: root
-    password: your_password
+    url: ${SMART_LAB_DB_URL:jdbc:mysql://localhost:3306/smart_lab_basic}
+    username: ${SMART_LAB_DB_USERNAME:root}
+    password: ${SMART_LAB_DB_PASSWORD:}
 ```
 
 3. **启动项目**
@@ -1646,9 +1646,9 @@ server:
 
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/smart_lab_basic
-    username: root
-    password: root
+    url: ${SMART_LAB_DB_URL:jdbc:mysql://localhost:3306/smart_lab_basic}
+    username: ${SMART_LAB_DB_USERNAME:root}
+    password: ${SMART_LAB_DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
 mybatis:
@@ -1661,7 +1661,7 @@ smart-lab:
   security:
     jwt:
       enabled: true
-      secret: ${SMART_LAB_JWT_SECRET:smart-lab-dev-jwt-secret-change-in-production-2026}
+      secret: ${SMART_LAB_JWT_SECRET:}
       expiration-seconds: 7200         # Token有效期2小时
 
 # AI配置

@@ -8,6 +8,7 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.util.LinkedHashMap;
@@ -61,13 +62,36 @@ public class AiAssistantUserConfigServiceImpl implements AiAssistantUserConfigSe
 
     @Override
     @Transactional(readOnly = true)
+    public Map<String, Object> testConnection(Integer userId) {
+        requireUserId(userId);
+        AiAssistantUserConfigEntity config = resolveConfig(userId);
+        requireEnabledConfig(config);
+
+        String answer = requestChatCompletion(config, "请只回复 OK，用于验证当前接口连接是否可用。");
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("connected", true);
+        result.put("baseUrl", normalizeChatCompletionsUrl(config.getBaseUrl()).replaceAll("/chat/completions$", ""));
+        result.put("model", firstNonBlank(config.getModel(), DEFAULT_MODEL));
+        result.put("responsePreview", answer.length() > 80 ? answer.substring(0, 80) : answer);
+        return result;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public String chat(Integer userId, String question) {
         requireUserId(userId);
         AiAssistantUserConfigEntity config = resolveConfig(userId);
+        requireEnabledConfig(config);
+        return requestChatCompletion(config, question);
+    }
+
+    private void requireEnabledConfig(AiAssistantUserConfigEntity config) {
         if (!Boolean.TRUE.equals(config.getEnabled()) || firstNonBlank(config.getApiKey()).isBlank()) {
             throw new IllegalArgumentException("请先在智能辅助页面保存 AI 接口配置");
         }
+    }
 
+    private String requestChatCompletion(AiAssistantUserConfigEntity config, String question) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", config.getModel());
         body.put("messages", List.of(
@@ -87,11 +111,13 @@ public class AiAssistantUserConfigServiceImpl implements AiAssistantUserConfigSe
                     .body(Map.class);
         } catch (RestClientResponseException exception) {
             throw new IllegalArgumentException(buildApiErrorMessage(exception));
+        } catch (RestClientException exception) {
+            throw new IllegalArgumentException("第三方 AI 接口连接失败，请检查 API 地址、Key、模型名称或服务器网络：" + exception.getMessage());
         }
 
         String answer = extractText(response);
         if (answer.isBlank()) {
-            throw new IllegalStateException("AI 接口未返回可展示内容");
+            throw new IllegalArgumentException("AI 接口未返回可展示内容");
         }
         return answer;
     }

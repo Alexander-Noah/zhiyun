@@ -25,7 +25,17 @@ public interface UserMapper {
 
     int updatePassword(@Param("id") Integer id, @Param("password") String password);
 
+    int updateUserDepartment(@Param("id") Integer id, @Param("department") String department);
+
+    int updateUserPermissions(@Param("id") Integer id, @Param("permissions") String permissions);
+
+    int countSystemAdmins();
+
+    int countUserBusinessReferences(@Param("id") Integer id);
+
     void deleteUserRoles(@Param("userId") Integer userId);
 
     void insertUserRole(@Param("userId") Integer userId, @Param("roleCode") String roleCode);
+
+    int deleteUser(@Param("id") Integer id);
 }

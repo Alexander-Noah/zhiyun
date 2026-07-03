@@ -8,8 +8,6 @@ public interface IotHardwareService {
 
     List<Map<String, Object>> listHardwareDevices();
 
-    Map<String, Object> getLabDevices(Long labId);
-
     Map<String, Object> getLabStatus(Long labId);
 
     Map<String, Object> executeAccessCommand(Long labId, String action, Map<String, Object> payload);

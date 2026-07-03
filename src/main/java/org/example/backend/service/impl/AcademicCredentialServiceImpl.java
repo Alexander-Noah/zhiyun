@@ -27,7 +27,7 @@ import java.util.Properties;
 public class AcademicCredentialServiceImpl implements AcademicCredentialService {
     private static final int IV_LENGTH = 12;
     private static final int GCM_TAG_LENGTH = 128;
-    private static final String DEFAULT_SECRET = "zhiyun-lab-local-dev-secret-change-me";
+    private static final int MIN_SECRET_LENGTH = 32;
 
     private final SecureRandom secureRandom = new SecureRandom();
     private final Path storePath;
@@ -38,7 +38,21 @@ public class AcademicCredentialServiceImpl implements AcademicCredentialService 
             @Value("${academic.credentials.secret:${ACADEMIC_CREDENTIAL_SECRET:}}") String secret
     ) {
         this.storePath = Path.of(storePath);
-        this.secretKey = buildSecretKey(secret == null || secret.isBlank() ? DEFAULT_SECRET : secret);
+        this.secretKey = buildSecretKey(requireStrongSecret(secret, "ACADEMIC_CREDENTIAL_SECRET"));
+    }
+
+    private String requireStrongSecret(String value, String name) {
+        String secret = value == null ? "" : value.trim();
+        if (secret.isBlank()) {
+            throw new IllegalStateException(name + " must be configured");
+        }
+        if (secret.toLowerCase().contains("change-me") || secret.toLowerCase().contains("dev-secret")) {
+            throw new IllegalStateException(name + " must not use the development default");
+        }
+        if (secret.length() < MIN_SECRET_LENGTH) {
+            throw new IllegalStateException(name + " must be at least 32 characters");
+        }
+        return secret;
     }
 
     @Override

@@ -47,5 +47,8 @@ data/*.properties
 !data/.gitkeep
 Python/课表导出结果/
 
+.local-dev-secrets.properties
+Python/.debug_timetable/
+
 # Spring Boot
 spring-boot-devtools.properties

@@ -7,5 +7,7 @@ public interface AiAssistantUserConfigService {
 
     Map<String, Object> saveConfig(Integer userId, Map<String, Object> payload);
 
+    Map<String, Object> testConnection(Integer userId);
+
     String chat(Integer userId, String question);
 }

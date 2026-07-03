@@ -140,12 +140,10 @@
           and coalesce(deleted, 0) = 0
     </update>
 
-    <update id="updateDeviceRuntimeStateByNameOrCode">
+    <update id="updateDeviceAssetMaintenanceStateByNameOrCode">
         update device
         set
             status = #{status},
-            health = #{health},
-            online = #{online},
             maintenance = trim(concat(coalesce(maintenance, ''), '\n', #{maintenance})),
             updated_at = now()
         where coalesce(deleted, 0) = 0
@@ -155,9 +153,6 @@
     <update id="updateInventoryState">
         update device
         set
-            status = #{status},
-            health = #{health},
-            online = #{online},
             inventory_date = #{inventoryDate},
             updated_at = now()
         where id = #{id}
@@ -210,6 +205,7 @@
             count(1) as total,
             sum(case when status = '正常' then 1 else 0 end) as normal,
             sum(case when status = '维修中' then 1 else 0 end) as repairing,
+            sum(case when status = '闲置' then 1 else 0 end) as idle,
             sum(case when status = '已报废' then 1 else 0 end) as scrapped
         from device
         where coalesce(deleted, 0) = 0

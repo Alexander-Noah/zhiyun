@@ -64,6 +64,13 @@ public class AiAssistantConfigController {
         return Result.success("保存 AI 接口配置成功", userConfigService.saveConfig(userId, payload));
     }
 
+    @PostMapping("/ai-assistant/user-config/test")
+    public Result testUserConfig(
+            @RequestAttribute(value = JwtAuthenticationFilter.AUTH_USER_ID_ATTRIBUTE, required = false) Integer userId
+    ) {
+        return Result.success("AI 接口连接测试成功", userConfigService.testConnection(userId));
+    }
+
     @PostMapping("/ai-assistant/chat")
     public Result chat(
             @RequestAttribute(value = JwtAuthenticationFilter.AUTH_USER_ID_ATTRIBUTE, required = false) Integer userId,

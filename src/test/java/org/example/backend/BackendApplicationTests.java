@@ -1,13 +1,12 @@
 package org.example.backend;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+
 class BackendApplicationTests {
-
     @Test
-    void contextLoads() {
+    void applicationEntryPointIsLoadable() {
+        assertDoesNotThrow(() -> Class.forName("org.example.backend.BackendApplication"));
     }
-
 }

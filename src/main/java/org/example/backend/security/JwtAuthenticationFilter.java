@@ -23,39 +23,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     public static final String AUTH_ROLE_ATTRIBUTE = "authRole";
     public static final String AUTH_USER_ID_ATTRIBUTE = "authUserId";
 
-    /**
-     * 精确放行路径
-     */
     private static final Set<String> PUBLIC_PATHS = Set.of(
             "/auth/login",
             "/auth/logout",
-
             "/ai-assistant/ws",
             "/ws/ai-assistant",
-
             "/error",
             "/favicon.ico",
             "/actuator/health",
-            "/activation-codes/verify",
-            "/admin/activation-codes/verify",
-
-            // Springdoc / Swagger
-            "/v3/api-docs",
-            "/swagger-ui.html",
-            "/swagger-ui/index.html"
+            "/activation-codes/verify"
     );
 
-    /**
-     * 前缀放行路径
-     * 例如 /swagger-ui/swagger-initializer.js
-     * 例如 /v3/api-docs/swagger-config
-     */
     private static final String[] PUBLIC_PREFIXES = {
-            "/files/avatar-proxy",
-            "/public/",
-            "/v3/api-docs/",
-            "/swagger-ui/",
-            "/webjars/"
+            "/public/"
     };
 
     private final JwtService jwtService;
@@ -75,7 +55,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
-
         if (!enabled || shouldSkip(request)) {
             filterChain.doFilter(request, response);
             return;
@@ -99,30 +78,24 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private boolean shouldSkip(HttpServletRequest request) {
-        // 放行 OPTIONS 预检请求
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             return true;
         }
 
         String path = request.getServletPath();
-
-        // 兜底处理
         if (path == null || path.isBlank()) {
             path = request.getRequestURI();
         }
 
-        // 精确匹配放行
         if (PUBLIC_PATHS.contains(path)) {
             return true;
         }
 
-        // 前缀匹配放行
         for (String prefix : PUBLIC_PREFIXES) {
             if (path.startsWith(prefix)) {
                 return true;
             }
         }
-
         return false;
     }
 
@@ -131,11 +104,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (authorization == null || authorization.isBlank()) {
             return "";
         }
-
         if (!authorization.regionMatches(true, 0, "Bearer ", 0, 7)) {
             return "";
         }
-
         return authorization.substring(7).trim();
     }
 

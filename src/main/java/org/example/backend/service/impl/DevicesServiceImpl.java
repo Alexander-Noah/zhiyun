@@ -21,6 +21,7 @@ import org.xml.sax.InputSource;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -46,6 +47,7 @@ import java.util.zip.ZipInputStream;
 public class DevicesServiceImpl implements DevicesService {
     private static final String STATUS_NORMAL = "正常";
     private static final String STATUS_REPAIRING = "维修中";
+    private static final String STATUS_IDLE = "闲置";
     private static final String STATUS_SCRAPPED = "已报废";
     private static final String HEALTH_GOOD = "良好";
     private static final String DEFAULT_UNIT = "台";
@@ -57,10 +59,14 @@ public class DevicesServiceImpl implements DevicesService {
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final Pattern ROOM_NUMBER_PATTERN = Pattern.compile("(\\d+[A-Za-z0-9-]*)");
     private static final Pattern DEVICE_QUANTITY_PATTERN =
-            Pattern.compile("(.+?)\\s*([0-9]+)\\s*(台 | 套 | 个 | 件 | 组 | 批 | 只 | 块 | 条 | 根)");
+            Pattern.compile("(.+?)\\s*([0-9]+)\\s*(台|套|个|件|组|批|只|块|条|根)");
     private static final Pattern DEVICE_TYPE_BOUNDARY_PATTERN =
             Pattern.compile("\\s+((?:台式电脑|电脑|交换机|投影仪|投影机|空调|显示器|路由器)[：:])");
     private static final AtomicLong CODE_SEQUENCE = new AtomicLong(System.currentTimeMillis() % 100000);
+    private static final long MAX_IMPORT_FILE_SIZE = 10L * 1024 * 1024;
+    private static final int MAX_XLSX_ZIP_ENTRIES = 128;
+    private static final long MAX_XLSX_ENTRY_BYTES = 5L * 1024 * 1024;
+    private static final long MAX_XLSX_TOTAL_BYTES = 10L * 1024 * 1024;
 
     private final DevicesMapper devicesMapper;
     private final DeviceInventoryRecordMapper deviceInventoryRecordMapper;
@@ -118,6 +124,7 @@ public class DevicesServiceImpl implements DevicesService {
         normalized.put("total", toLong(stats == null ? null : stats.get("total")));
         normalized.put("normal", toLong(stats == null ? null : stats.get("normal")));
         normalized.put("repairing", toLong(stats == null ? null : stats.get("repairing")));
+        normalized.put("idle", toLong(stats == null ? null : stats.get("idle")));
         normalized.put("scrapped", toLong(stats == null ? null : stats.get("scrapped")));
         return normalized;
     }
@@ -211,7 +218,7 @@ public class DevicesServiceImpl implements DevicesService {
         String inventoryDate = record.getInspectedAt().length() >= 10
                 ? record.getInspectedAt().substring(0, 10)
                 : LocalDate.now().toString();
-        devicesMapper.updateInventoryState(deviceId, record.getResultStatus(), device.getHealth(), device.getOnline(), inventoryDate);
+        devicesMapper.updateInventoryState(deviceId, inventoryDate);
         DevicesEntity savedDevice = devicesMapper.getDevicesById(deviceId);
         List<DeviceInventoryRecordEntity> records = deviceInventoryRecordMapper.listRecordsByDeviceId(deviceId);
         return new DeviceInventoryRecordResult(savedDevice, record, records == null ? List.of() : records);
@@ -257,6 +264,7 @@ public class DevicesServiceImpl implements DevicesService {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("请上传Excel或csv文件");
         }
+        validateImportFile(file);
 
         List<DevicesEntity> parsedDevices = parseDeviceImportFile(file);
         int importedCount = 0;
@@ -309,6 +317,16 @@ public class DevicesServiceImpl implements DevicesService {
             return devices;
         } catch (IOException error) {
             throw new IllegalArgumentException("Failed to read import file: " + error.getMessage(), error);
+        }
+    }
+
+    private void validateImportFile(MultipartFile file) {
+        if (file.getSize() > MAX_IMPORT_FILE_SIZE) {
+            throw new IllegalArgumentException("Import file must not exceed 10MB");
+        }
+        String filename = textOrEmpty(file.getOriginalFilename()).toLowerCase();
+        if (!filename.endsWith(".csv") && !filename.endsWith(".xlsx")) {
+            throw new IllegalArgumentException("Only CSV or xlsx import files are supported");
         }
     }
 
@@ -383,13 +401,42 @@ public class DevicesServiceImpl implements DevicesService {
 
     private Map<String, byte[]> readZipEntries(InputStream inputStream) throws IOException {
         Map<String, byte[]> entries = new HashMap<>();
+        int entryCount = 0;
+        long totalBytes = 0;
         try (ZipInputStream zip = new ZipInputStream(inputStream)) {
             ZipEntry entry;
             while ((entry = zip.getNextEntry()) != null) {
-                entries.put(entry.getName(), zip.readAllBytes());
+                if (entry.isDirectory()) {
+                    continue;
+                }
+                entryCount++;
+                if (entryCount > MAX_XLSX_ZIP_ENTRIES) {
+                    throw new IllegalArgumentException("Excel archive contains too many entries");
+                }
+                byte[] content = readZipEntryBytes(zip, entry.getName());
+                totalBytes += content.length;
+                if (totalBytes > MAX_XLSX_TOTAL_BYTES) {
+                    throw new IllegalArgumentException("Excel archive is too large");
+                }
+                entries.put(entry.getName(), content);
             }
         }
         return entries;
+    }
+
+    private byte[] readZipEntryBytes(InputStream inputStream, String entryName) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        long entryBytes = 0;
+        int read;
+        while ((read = inputStream.read(buffer)) != -1) {
+            entryBytes += read;
+            if (entryBytes > MAX_XLSX_ENTRY_BYTES) {
+                throw new IllegalArgumentException("Excel archive entry is too large: " + entryName);
+            }
+            output.write(buffer, 0, read);
+        }
+        return output.toByteArray();
     }
 
     private List<String> parseSharedStrings(byte[] xmlBytes) {
@@ -596,7 +643,7 @@ public class DevicesServiceImpl implements DevicesService {
             while (matcher.find()) {
                 String deviceName = matcher.group(1).trim();
                 if (!deviceName.isBlank()) {
-                    items.add(new DeviceTextItem(deviceLine.deviceType(), deviceName, parseQuantity(matcher.group(2)), matcher.group(3)));
+                    items.add(new DeviceTextItem(deviceLine.deviceType(), deviceName, parseQuantity(matcher.group(2)), matcher.group(3).trim()));
                     matched = true;
                 }
             }
@@ -653,6 +700,7 @@ public class DevicesServiceImpl implements DevicesService {
         }
         if (!STATUS_NORMAL.equals(device.getStatus())
                 && !STATUS_REPAIRING.equals(device.getStatus())
+                && !STATUS_IDLE.equals(device.getStatus())
                 && !STATUS_SCRAPPED.equals(device.getStatus())) {
             device.setStatus(STATUS_NORMAL);
         }

@@ -6,7 +6,6 @@ import org.example.backend.websocket.AiAssistantWebSocketHandler;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
-import org.springframework.http.server.ServletServerHttpRequest;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.server.HandshakeInterceptor;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
@@ -15,11 +14,8 @@ import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.server.standard.ServletServerContainerFactoryBean;
 import org.springframework.context.annotation.Bean;
 
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
-import java.util.Optional;
 
 @Configuration
 @EnableWebSocket
@@ -33,7 +29,7 @@ public class AiAssistantWebSocketConfig implements WebSocketConfigurer {
     public AiAssistantWebSocketConfig(
             AiAssistantWebSocketHandler aiAssistantWebSocketHandler,
             JwtService jwtService,
-            @Value("${smart-lab.security.cors.allowed-origin-patterns:http://localhost:*,http://127.0.0.1:*,http://10.*.*.*:*,http://172.*.*.*:*,http://192.168.*.*:*}") String allowedOriginPatterns
+            @Value("${smart-lab.security.cors.allowed-origin-patterns:http://localhost:*,http://127.0.0.1:*,tauri://localhost,http://tauri.localhost}") String allowedOriginPatterns
     ) {
         this.aiAssistantWebSocketHandler = aiAssistantWebSocketHandler;
         this.jwtService = jwtService;
@@ -101,16 +97,23 @@ public class AiAssistantWebSocketConfig implements WebSocketConfigurer {
                 return authorization.substring(7).trim();
             }
 
-            if (request instanceof ServletServerHttpRequest servletRequest) {
-                String token = servletRequest.getServletRequest().getParameter("token");
-                return token == null ? "" : token.trim();
+            String subprotocolToken = resolveTokenFromSubprotocol(request);
+            if (!subprotocolToken.isBlank()) {
+                return subprotocolToken;
             }
 
-            String query = Optional.ofNullable(request.getURI().getRawQuery()).orElse("");
-            return Arrays.stream(query.split("&"))
-                    .map(parameter -> parameter.split("=", 2))
-                    .filter(parts -> parts.length == 2 && "token".equals(parts[0]))
-                    .map(parts -> URLDecoder.decode(parts[1], StandardCharsets.UTF_8))
+            return "";
+        }
+
+        private String resolveTokenFromSubprotocol(ServerHttpRequest request) {
+            String header = request.getHeaders().getFirst("Sec-WebSocket-Protocol");
+            if (header == null || header.isBlank()) {
+                return "";
+            }
+            return Arrays.stream(header.split(","))
+                    .map(String::trim)
+                    .filter(protocol -> protocol.startsWith("smart-lab.jwt."))
+                    .map(protocol -> protocol.substring("smart-lab.jwt.".length()).trim())
                     .findFirst()
                     .orElse("");
         }

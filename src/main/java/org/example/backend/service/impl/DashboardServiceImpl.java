@@ -274,7 +274,7 @@ public class DashboardServiceImpl implements DashboardService {
 
     private List<Map<String, Object>> buildShortcuts() {
         List<Map<String, Object>> shortcuts = new ArrayList<>();
-        shortcuts.add(shortcut("设备资产", "资产台账与设备状态", "/lab-admin/devices", "device"));
+        shortcuts.add(shortcut("设备资产", "资产台账与生命周期管理", "/lab-admin/devices", "device"));
         shortcuts.add(shortcut("设备状态", "在线、故障与维护监测", "/lab-admin/device-status", "normal"));
         shortcuts.add(shortcut("预约审批", "课程与自主预约审核", "/lab-admin/reservations", "reservation"));
         shortcuts.add(shortcut("故障报修", "故障流转与维修跟踪", "/lab-admin/repairs", "repair"));

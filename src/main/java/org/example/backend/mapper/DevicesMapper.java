@@ -37,19 +37,14 @@ public interface DevicesMapper {
 
     int updateDevices(@Param("id") Long id, @Param("devices") DevicesEntity devices);
 
-    int updateDeviceRuntimeStateByNameOrCode(
+    int updateDeviceAssetMaintenanceStateByNameOrCode(
             @Param("device") String device,
             @Param("status") String status,
-            @Param("health") String health,
-            @Param("online") Boolean online,
             @Param("maintenance") String maintenance
     );
 
     int updateInventoryState(
             @Param("id") Long id,
-            @Param("status") String status,
-            @Param("health") String health,
-            @Param("online") Boolean online,
             @Param("inventoryDate") String inventoryDate
     );
 

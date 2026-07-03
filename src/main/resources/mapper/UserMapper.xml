@@ -114,6 +114,38 @@
         where id = #{id}
     </update>
 
+    <update id="updateUserDepartment">
+        update sys_user
+        set department = #{department},
+            updated_at = now()
+        where id = #{id}
+    </update>
+
+    <update id="updateUserPermissions">
+        update sys_user
+        set permissions = #{permissions},
+            updated_at = now()
+        where id = #{id}
+    </update>
+
+    <select id="countSystemAdmins" resultType="int">
+        select count(*)
+        from sys_user u
+        join user_role ur on ur.user_id = u.id
+        join role r on r.id = ur.role_id
+        where r.role_code = 'systemAdmin'
+    </select>
+
+    <select id="countUserBusinessReferences" resultType="int">
+        select
+            (select count(1) from lab where manager_user_id = #{id})
+            + (select count(1) from device where owner_user_id = #{id})
+            + (select count(1) from course_environment_request where teacher_user_id = #{id})
+            + (select count(1) from lab_reservation where applicant_user_id = #{id})
+            + (select count(1) from repair_order where reporter_user_id = #{id})
+            + (select count(1) from notice where created_by = #{id})
+    </select>
+
     <delete id="deleteUserRoles">
         delete from user_role
         where user_id = #{userId}
@@ -129,5 +161,10 @@
         where role_code = #{roleCode}
         limit 1
     </insert>
+
+    <delete id="deleteUser">
+        delete from sys_user
+        where id = #{id}
+    </delete>
 
 </mapper>

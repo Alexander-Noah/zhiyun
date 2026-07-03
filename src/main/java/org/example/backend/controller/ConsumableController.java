@@ -4,6 +4,7 @@ import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.example.backend.result.Result;
 import org.example.backend.entity.ConsumableEntity;
+import org.example.backend.entity.ConsumableStockRecordEntity;
 import org.example.backend.service.ConsumableService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Collections;
@@ -32,9 +34,19 @@ public class ConsumableController {
         return Result.success("获取耗材列表成功", consumableService.listConsumables());
     }
 
+    @GetMapping("/stock-records")
+    public Result listStockRecords(@RequestParam(required = false) Long consumableId) {
+        return Result.success("获取耗材出入库记录成功", consumableService.listStockRecords(consumableId));
+    }
+
     @PostMapping
     public Result createConsumable(@RequestBody ConsumableEntity consumable) {
         return Result.success("新增耗材成功", consumableService.createConsumable(consumable));
+    }
+
+    @PostMapping("/{id:\\d+}/movement")
+    public Result recordConsumableMovement(@PathVariable Long id, @RequestBody ConsumableStockRecordEntity record) {
+        return Result.success("保存耗材出入库记录成功", consumableService.recordConsumableMovement(id, record));
     }
 
     @PutMapping("/{id}")

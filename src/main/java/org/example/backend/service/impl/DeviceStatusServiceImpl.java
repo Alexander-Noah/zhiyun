@@ -6,6 +6,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -190,10 +192,12 @@ public class DeviceStatusServiceImpl implements DeviceStatusService {
 
     private TerminalBinding findTerminal(Map<String, Object> request) {
         String terminalId = stringValue(request.get("terminalId"));
-        if (!StringUtils.hasText(terminalId)) {
+        String terminalToken = stringValue(request.get("terminalToken"));
+        if (!StringUtils.hasText(terminalId) && !StringUtils.hasText(terminalToken)) {
             return TerminalBinding.empty();
         }
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
+        List<Object> args = new ArrayList<>();
+        StringBuilder sql = new StringBuilder("""
                 select
                   id,
                   terminal_id as terminalId,
@@ -201,11 +205,20 @@ public class DeviceStatusServiceImpl implements DeviceStatusService {
                   lab_code as labCode,
                   lab_name as labName
                 from lab_terminal
-                where terminal_id = ?
-                  and status = 'active'
+                where status = 'active'
                   and coalesce(deleted, 0) = 0
-                limit 1
-                """, terminalId);
+                """);
+        if (StringUtils.hasText(terminalId)) {
+            sql.append(" and terminal_id = ?");
+            args.add(terminalId);
+        }
+        if (StringUtils.hasText(terminalToken)) {
+            sql.append(" and terminal_token_hash = ?");
+            args.add(hashTerminalToken(terminalToken));
+        }
+        sql.append(" limit 1");
+
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql.toString(), args.toArray());
         if (rows.isEmpty()) {
             return TerminalBinding.empty();
         }
@@ -337,7 +350,13 @@ public class DeviceStatusServiceImpl implements DeviceStatusService {
         if (terminalRecordId == null) {
             return;
         }
-        jdbcTemplate.update("update lab_terminal set last_seen_at = ?, updated_at = current_timestamp where id = ?", reportTime, terminalRecordId);
+        jdbcTemplate.update("""
+                update lab_terminal
+                set first_connected_at = coalesce(first_connected_at, ?),
+                    last_seen_at = ?,
+                    updated_at = current_timestamp
+                where id = ?
+                """, reportTime, reportTime, terminalRecordId);
     }
 
     private Long longValue(Object value) {
@@ -390,6 +409,23 @@ public class DeviceStatusServiceImpl implements DeviceStatusService {
 
     private String stringValue(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    private String hashTerminalToken(String terminalToken) {
+        if (!StringUtils.hasText(terminalToken)) {
+            return "";
+        }
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(terminalToken.trim().getBytes(StandardCharsets.UTF_8));
+            StringBuilder builder = new StringBuilder();
+            for (byte current : hash) {
+                builder.append(String.format("%02x", current));
+            }
+            return builder.toString();
+        } catch (Exception exception) {
+            throw new IllegalStateException("Failed to hash terminal token", exception);
+        }
     }
 
     private record TerminalBinding(Long id, String terminalId, Long labId, String labCode, String labName) {
