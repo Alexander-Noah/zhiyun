@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.example.backend.mapper.StudentClientMapper">
+    <insert id="upsertOnline">
+        insert into student_client(
+            lab_id,
+            student_device_id,
+            host_name,
+            ip_address,
+            status,
+            token,
+            last_heartbeat_time
+        )
+        values(
+            #{labId},
+            #{studentDeviceId},
+            #{hostName},
+            #{ipAddress},
+            #{status},
+            #{token},
+            #{lastHeartbeatTime}
+        )
+        on duplicate key update
+            host_name = values(host_name),
+            ip_address = values(ip_address),
+            status = values(status),
+            token = values(token),
+            last_heartbeat_time = values(last_heartbeat_time),
+            updated_at = current_timestamp
+    </insert>
+
+    <update id="markOffline">
+        update student_client
+        set status = 'offline',
+            updated_at = current_timestamp
+        where student_device_id = #{studentDeviceId}
+          and lab_id = #{labId}
+    </update>
+
+    <select id="selectByLabId" resultType="org.example.backend.entity.StudentClientEntity">
+        select
+            id,
+            lab_id as labId,
+            student_device_id as studentDeviceId,
+            host_name as hostName,
+            ip_address as ipAddress,
+            status,
+            token,
+            last_heartbeat_time as lastHeartbeatTime,
+            created_at as createdAt,
+            updated_at as updatedAt
+        from student_client
+        where lab_id = #{labId}
+        order by status desc, last_heartbeat_time desc, id desc
+    </select>
+</mapper>

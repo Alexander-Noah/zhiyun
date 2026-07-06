@@ -1,13 +1,11 @@
 package org.example.backend.service.impl;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.backend.service.IotDeviceService;
+import org.example.backend.service.gateway.IotGatewayCommandService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -17,12 +15,12 @@ import java.util.UUID;
 
 @Service
 public class IotDeviceServiceImpl implements IotDeviceService {
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-
     private final JdbcTemplate jdbcTemplate;
+    private final IotGatewayCommandService iotGatewayCommandService;
 
-    public IotDeviceServiceImpl(JdbcTemplate jdbcTemplate) {
+    public IotDeviceServiceImpl(JdbcTemplate jdbcTemplate, IotGatewayCommandService iotGatewayCommandService) {
         this.jdbcTemplate = jdbcTemplate;
+        this.iotGatewayCommandService = iotGatewayCommandService;
     }
 
     @Override
@@ -166,39 +164,7 @@ public class IotDeviceServiceImpl implements IotDeviceService {
     public Map<String, Object> control(Map<String, Object> payload) {
         Map<String, Object> request = payload == null ? Map.of() : payload;
         Map<String, Object> device = findControlTarget(request);
-        Long labId = firstLong(longValue(request.get("labId")), longValue(device.get("labId")));
-        if (labId == null) {
-            throw new IllegalArgumentException("缺少实验室ID");
-        }
-
-        String protocol = stringValue(device.get("protocol"));
-        boolean configured = booleanValue(device.get("configured"));
-        String resultStatus = (!configured || "mock".equalsIgnoreCase(protocol)) ? "mock_success" : "pending";
-        String commandNo = "IOT-CMD-" + UUID.randomUUID();
-        jdbcTemplate.update("""
-                insert into iot_command_log (
-                  command_no, iot_device_id, iot_code, lab_id, command_key, action,
-                  payload_json, result_status, response_summary, operator_id, operator_name,
-                  source_type, executed_at, finished_at
-                )
-                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                commandNo,
-                longValue(device.get("id")),
-                stringValue(device.get("iotCode")),
-                labId,
-                firstNonBlank(stringValue(request.get("commandKey")), stringValue(request.get("action"))),
-                firstNonBlank(stringValue(request.get("action")), stringValue(request.get("commandKey"))),
-                toJson(request.get("payload")),
-                resultStatus,
-                "mock_success".equals(resultStatus) ? "当前为模拟控制，后续可接入真实硬件网关" : "控制命令已记录，等待硬件网关回执",
-                longValue(request.get("operatorId")),
-                stringValue(request.get("operatorName")),
-                firstNonBlank(stringValue(request.get("sourceType")), configured ? "gateway" : "mock"),
-                LocalDateTime.now(),
-                "mock_success".equals(resultStatus) ? LocalDateTime.now() : null
-        );
-        return findCommandLogByNo(commandNo);
+        return iotGatewayCommandService.execute(device, request);
     }
 
     @Override
@@ -257,6 +223,10 @@ public class IotDeviceServiceImpl implements IotDeviceService {
                   configured as configured,
                   enabled as enabled,
                   status as status,
+                  case
+                    when configured = 0 or protocol = 'mock' then 'mock_gateway'
+                    else 'real_gateway_unconfigured'
+                  end as gatewayMode,
                   snapshot_url as snapshotUrl,
                   stream_url as streamUrl,
                   source_type as sourceType,
@@ -275,14 +245,21 @@ public class IotDeviceServiceImpl implements IotDeviceService {
                   iot_device_id as iotDeviceId,
                   iot_code as iotCode,
                   lab_id as labId,
+                  gateway_id as gatewayId,
+                  point_id as pointId,
                   command_key as commandKey,
                   action as action,
                   payload_json as payloadJson,
+                  request_params_json as requestParamsJson,
+                  response_result_json as responseResultJson,
                   result_status as resultStatus,
+                  execution_status as executionStatus,
+                  error_message as errorMessage,
                   response_summary as responseSummary,
                   operator_id as operatorId,
                   operator_name as operatorName,
                   source_type as sourceType,
+                  gateway_mode as gatewayMode,
                   executed_at as executedAt,
                   finished_at as finishedAt,
                   created_at as createdAt
@@ -336,11 +313,6 @@ public class IotDeviceServiceImpl implements IotDeviceService {
             throw new IllegalArgumentException("物联设备不存在");
         }
         return rows.get(0);
-    }
-
-    private Map<String, Object> findCommandLogByNo(String commandNo) {
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(commandLogSelectSql() + " where command_no = ? limit 1", commandNo);
-        return rows.isEmpty() ? Map.of() : rows.get(0);
     }
 
     private void appendEquals(StringBuilder sql, List<Object> args, String column, String value) {
@@ -413,14 +385,4 @@ public class IotDeviceServiceImpl implements IotDeviceService {
         return value == null ? "" : String.valueOf(value).trim();
     }
 
-    private String toJson(Object value) {
-        if (value == null) {
-            return "{}";
-        }
-        try {
-            return OBJECT_MAPPER.writeValueAsString(value);
-        } catch (JsonProcessingException ignored) {
-            return "{}";
-        }
-    }
 }

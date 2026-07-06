@@ -9,7 +9,9 @@ public class SecurityAccessPolicy {
             "/auth/profile",
             "/auth/logout",
             "/dashboard",
-            "/files"
+            "/files",
+            "/teacher-hosts",
+            "/student-clients"
     );
 
     public boolean isAllowed(String method, String path, String roleCode) {

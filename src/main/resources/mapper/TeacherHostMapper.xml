@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.example.backend.mapper.TeacherHostMapper">
+    <insert id="upsertHeartbeat">
+        insert into teacher_host(
+            lab_id,
+            teacher_device_id,
+            host_ip,
+            port,
+            status,
+            token,
+            last_heartbeat_time
+        )
+        values(
+            #{labId},
+            #{teacherDeviceId},
+            #{hostIp},
+            #{port},
+            #{status},
+            #{token},
+            #{lastHeartbeatTime}
+        )
+        on duplicate key update
+            host_ip = values(host_ip),
+            port = values(port),
+            status = values(status),
+            token = values(token),
+            last_heartbeat_time = values(last_heartbeat_time),
+            updated_at = current_timestamp
+    </insert>
+
+    <select id="selectCurrentByLabId" resultType="org.example.backend.entity.TeacherHostEntity">
+        select
+            id,
+            lab_id as labId,
+            teacher_device_id as teacherDeviceId,
+            host_ip as hostIp,
+            port,
+            status,
+            token,
+            last_heartbeat_time as lastHeartbeatTime,
+            created_at as createdAt,
+            updated_at as updatedAt
+        from teacher_host
+        where lab_id = #{labId}
+          and status = 'online'
+        order by last_heartbeat_time desc, id desc
+        limit 1
+    </select>
+
+    <update id="markOffline">
+        update teacher_host
+        set status = 'offline',
+            updated_at = current_timestamp
+        where teacher_device_id = #{teacherDeviceId}
+          and lab_id = #{labId}
+    </update>
+</mapper>

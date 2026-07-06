@@ -35,7 +35,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     );
 
     private static final String[] PUBLIC_PREFIXES = {
-            "/public/"
+            "/public/",
+            "/teacher-hosts",
+            "/student-clients",
+            "/api/teacher-hosts",
+            "/api/student-clients"
     };
 
     private final JwtService jwtService;

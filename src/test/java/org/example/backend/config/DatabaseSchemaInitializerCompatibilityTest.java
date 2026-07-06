@@ -24,7 +24,15 @@ class DatabaseSchemaInitializerCompatibilityTest {
                 () -> assertTrue(migration.contains("CREATE TABLE IF NOT EXISTS device_status_event")),
                 () -> assertTrue(migration.contains("CREATE TABLE IF NOT EXISTS iot_device")),
                 () -> assertTrue(migration.contains("CREATE TABLE IF NOT EXISTS iot_device_capability")),
+                () -> assertTrue(migration.contains("CREATE TABLE IF NOT EXISTS iot_gateway_config")),
+                () -> assertTrue(migration.contains("CREATE TABLE IF NOT EXISTS iot_gateway_point")),
                 () -> assertTrue(migration.contains("CREATE TABLE IF NOT EXISTS iot_command_log")),
+                () -> assertTrue(migration.contains("gateway_id")),
+                () -> assertTrue(migration.contains("point_id")),
+                () -> assertTrue(migration.contains("request_params_json")),
+                () -> assertTrue(migration.contains("response_result_json")),
+                () -> assertTrue(migration.contains("execution_status")),
+                () -> assertTrue(migration.contains("gateway_mode")),
                 () -> assertTrue(migration.contains("CREATE TABLE IF NOT EXISTS iot_telemetry_latest"))
         );
     }
@@ -41,7 +49,10 @@ class DatabaseSchemaInitializerCompatibilityTest {
                 () -> assertTrue(initializer.contains("device_status_event")),
                 () -> assertTrue(initializer.contains("iot_device")),
                 () -> assertTrue(initializer.contains("iot_device_capability")),
+                () -> assertTrue(initializer.contains("iot_gateway_config")),
+                () -> assertTrue(initializer.contains("iot_gateway_point")),
                 () -> assertTrue(initializer.contains("iot_command_log")),
+                () -> assertTrue(initializer.contains("addIotCommandLogColumnIfMissing")),
                 () -> assertTrue(initializer.contains("iot_telemetry_latest"))
         );
     }

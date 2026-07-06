@@ -23,6 +23,7 @@ public class DatabaseSchemaInitializer implements ApplicationRunner {
         ensureApprovalCountersignTable();
         ensureAiAssistantConversationTable();
         ensureAiAssistantUserConfigTable();
+        ensureLanTeacherStudentTables();
     }
 
     private void ensureDeviceAssetColumns() {
@@ -235,6 +236,25 @@ public class DatabaseSchemaInitializer implements ApplicationRunner {
                 """);
 
         jdbcTemplate.execute("""
+                create table if not exists iot_gateway_config (
+                  id bigint primary key auto_increment,
+                  gateway_code varchar(80) not null comment '网关编码',
+                  gateway_name varchar(120) not null comment '网关名称',
+                  protocol_type varchar(32) not null default 'mock' comment '协议类型：mock模拟，http接口，mqtt消息',
+                  gateway_address varchar(500) default null comment '网关地址',
+                  auth_type varchar(40) not null default 'none' comment '鉴权方式：none无，token令牌，basic基础认证，custom自定义',
+                  auth_config_json json default null comment '鉴权配置JSON，不保存明文密钥时可存引用键',
+                  status varchar(32) not null default 'unconfigured' comment '状态：unconfigured未配置，enabled启用，disabled停用，abnormal异常',
+                  remark varchar(500) default null comment '备注',
+                  created_at datetime not null default current_timestamp comment '创建时间',
+                  updated_at datetime not null default current_timestamp on update current_timestamp comment '更新时间',
+                  deleted tinyint(1) not null default 0 comment '逻辑删除：0未删除，1已删除',
+                  unique key uk_iot_gateway_code (gateway_code),
+                  key idx_iot_gateway_protocol_status (protocol_type, status, deleted)
+                ) engine=InnoDB default charset=utf8mb4 comment='物联网关配置表'
+                """);
+
+        jdbcTemplate.execute("""
                 create table if not exists iot_device_capability (
                   id bigint primary key auto_increment,
                   iot_device_id bigint not null comment '物联设备ID',
@@ -259,30 +279,88 @@ public class DatabaseSchemaInitializer implements ApplicationRunner {
                 """);
 
         jdbcTemplate.execute("""
+                create table if not exists iot_gateway_point (
+                  id bigint primary key auto_increment,
+                  iot_device_id bigint not null comment '物联设备ID',
+                  gateway_id bigint default null comment '网关配置ID',
+                  command_type varchar(80) not null comment '命令类型：open开门，lock关门，set设置，off关闭，snapshot抓拍，status状态',
+                  point_code varchar(120) not null comment '点位编码',
+                  request_path varchar(500) default null comment '请求路径',
+                  request_template text default null comment '请求模板',
+                  enabled tinyint(1) not null default 1 comment '是否启用点位',
+                  remark varchar(500) default null comment '备注',
+                  created_at datetime not null default current_timestamp comment '创建时间',
+                  updated_at datetime not null default current_timestamp on update current_timestamp comment '更新时间',
+                  deleted tinyint(1) not null default 0 comment '逻辑删除：0未删除，1已删除',
+                  unique key uk_iot_gateway_point_device_command (iot_device_id, command_type),
+                  key idx_iot_gateway_point_gateway (gateway_id, enabled, deleted),
+                  key idx_iot_gateway_point_code (point_code),
+                  constraint fk_iot_gateway_point_device foreign key (iot_device_id) references iot_device(id) on delete cascade,
+                  constraint fk_iot_gateway_point_gateway foreign key (gateway_id) references iot_gateway_config(id) on delete set null
+                ) engine=InnoDB default charset=utf8mb4 comment='物联网关点位配置表'
+                """);
+
+        jdbcTemplate.execute("""
                 create table if not exists iot_command_log (
                   id bigint primary key auto_increment,
                   command_no varchar(80) not null comment '控制命令业务编号',
                   iot_device_id bigint default null comment '物联设备ID',
                   iot_code varchar(80) default null comment '物联设备编码快照',
                   lab_id bigint not null comment '实验室ID',
+                  gateway_id bigint default null comment '网关配置ID',
+                  point_id bigint default null comment '点位配置ID',
                   command_key varchar(80) not null comment '控制命令键',
                   action varchar(80) not null comment '操作名称',
                   payload_json json default null comment '请求载荷',
+                  request_params_json json default null comment '网关请求参数',
+                  response_result_json json default null comment '网关响应结果',
                   result_status varchar(32) not null default 'pending' comment '控制结果：mock_success模拟成功，pending待处理，success成功，failed失败',
+                  execution_status varchar(32) not null default 'pending' comment '执行状态：pending待执行，completed完成，failed失败',
+                  error_message varchar(1000) default null comment '错误信息',
                   response_summary varchar(1000) default null comment '响应摘要',
                   operator_id bigint default null comment '操作人用户ID',
                   operator_name varchar(80) default null comment '操作人姓名',
                   source_type varchar(32) not null default 'manual' comment '来源：manual手动，schedule计划任务，mock模拟，gateway网关',
+                  gateway_mode varchar(40) not null default 'mock_gateway' comment '网关接入模式：mock_gateway模拟网关，real_gateway_unconfigured真实网关未配置，real_gateway真实网关',
                   executed_at datetime not null default current_timestamp comment '命令执行开始时间',
                   finished_at datetime default null comment '命令执行完成时间',
                   created_at datetime not null default current_timestamp,
                   unique key uk_iot_command_no (command_no),
                   key idx_iot_command_lab_time (lab_id, executed_at),
                   key idx_iot_command_device (iot_device_id),
+                  key idx_iot_command_gateway (gateway_id, point_id),
                   key idx_iot_command_result (result_status),
                   constraint fk_iot_command_log_lab foreign key (lab_id) references lab(id),
                   constraint fk_iot_command_log_device foreign key (iot_device_id) references iot_device(id) on delete set null
                 ) engine=InnoDB default charset=utf8mb4 comment='物联控制命令日志表'
+                """);
+        addIotCommandLogColumnIfMissing("gateway_id", """
+                alter table iot_command_log
+                  add column gateway_id bigint default null comment '网关配置ID' after lab_id
+                """);
+        addIotCommandLogColumnIfMissing("point_id", """
+                alter table iot_command_log
+                  add column point_id bigint default null comment '点位配置ID' after gateway_id
+                """);
+        addIotCommandLogColumnIfMissing("request_params_json", """
+                alter table iot_command_log
+                  add column request_params_json json default null comment '网关请求参数' after payload_json
+                """);
+        addIotCommandLogColumnIfMissing("response_result_json", """
+                alter table iot_command_log
+                  add column response_result_json json default null comment '网关响应结果' after request_params_json
+                """);
+        addIotCommandLogColumnIfMissing("execution_status", """
+                alter table iot_command_log
+                  add column execution_status varchar(32) not null default 'pending' comment '执行状态：pending待执行，completed完成，failed失败' after result_status
+                """);
+        addIotCommandLogColumnIfMissing("error_message", """
+                alter table iot_command_log
+                  add column error_message varchar(1000) default null comment '错误信息' after execution_status
+                """);
+        addIotCommandLogColumnIfMissing("gateway_mode", """
+                alter table iot_command_log
+                  add column gateway_mode varchar(40) not null default 'mock_gateway' comment '网关接入模式：mock_gateway模拟网关，real_gateway_unconfigured真实网关未配置，real_gateway真实网关' after source_type
                 """);
 
         jdbcTemplate.execute("""
@@ -307,6 +385,22 @@ public class DatabaseSchemaInitializer implements ApplicationRunner {
                   constraint fk_iot_telemetry_lab foreign key (lab_id) references lab(id)
                 ) engine=InnoDB default charset=utf8mb4 comment='物联环境最新遥测表'
                 """);
+    }
+
+    private void addIotCommandLogColumnIfMissing(String columnName, String ddl) {
+        Integer count = jdbcTemplate.queryForObject("""
+                select count(*)
+                from information_schema.columns
+                where table_schema = database()
+                  and table_name = 'iot_command_log'
+                  and column_name = ?
+                """, Integer.class, columnName);
+
+        if (count != null && count > 0) {
+            return;
+        }
+
+        jdbcTemplate.execute(ddl);
     }
 
     private void ensureUserAvatarColumn() {
@@ -462,6 +556,44 @@ public class DatabaseSchemaInitializer implements ApplicationRunner {
                   updated_at datetime not null default current_timestamp on update current_timestamp comment '更新时间',
                   unique key uk_ai_user_config_user (user_id)
                 ) comment 'AI助手用户配置表'
+                """);
+    }
+
+    private void ensureLanTeacherStudentTables() {
+        jdbcTemplate.execute("""
+                create table if not exists teacher_host (
+                  id bigint primary key auto_increment comment '主键',
+                  lab_id bigint not null comment '实验室ID',
+                  teacher_device_id varchar(120) not null comment '教师端设备ID',
+                  host_ip varchar(64) not null comment '教师端内网IP',
+                  port int not null default 8765 comment '教师端本地WebSocket端口',
+                  status varchar(20) not null default 'offline' comment '状态：online在线，offline离线',
+                  token varchar(500) default null comment '客户端授权令牌快照',
+                  last_heartbeat_time datetime not null comment '最近心跳时间',
+                  created_at datetime not null default current_timestamp comment '创建时间',
+                  updated_at datetime not null default current_timestamp on update current_timestamp comment '更新时间',
+                  unique key uk_teacher_host_lab_device (lab_id, teacher_device_id),
+                  key idx_teacher_host_lab_status_time (lab_id, status, last_heartbeat_time),
+                  constraint fk_teacher_host_lab foreign key (lab_id) references lab(id)
+                ) engine=InnoDB default charset=utf8mb4 comment='实验室教师端主机登记表'
+                """);
+
+        jdbcTemplate.execute("""
+                create table if not exists student_client (
+                  id bigint primary key auto_increment comment '主键',
+                  lab_id bigint not null comment '实验室ID',
+                  student_device_id varchar(120) not null comment '学生端设备ID',
+                  host_name varchar(120) default null comment '学生端主机名',
+                  ip_address varchar(64) default null comment '学生端内网IP',
+                  status varchar(20) not null default 'offline' comment '状态：online在线，offline离线',
+                  token varchar(500) default null comment '客户端授权令牌快照',
+                  last_heartbeat_time datetime not null comment '最近心跳时间',
+                  created_at datetime not null default current_timestamp comment '创建时间',
+                  updated_at datetime not null default current_timestamp on update current_timestamp comment '更新时间',
+                  unique key uk_student_client_lab_device (lab_id, student_device_id),
+                  key idx_student_client_lab_status_time (lab_id, status, last_heartbeat_time),
+                  constraint fk_student_client_lab foreign key (lab_id) references lab(id)
+                ) engine=InnoDB default charset=utf8mb4 comment='实验室学生端在线状态表'
                 """);
     }
 }

@@ -56,6 +56,31 @@ class DeviceModuleBoundaryTest {
     }
 
     @Test
+    void iotControlUsesGatewayAdapterLayerAndDoesNotInlineMockLogic() throws IOException {
+        String adapter = readSource("service", "gateway", "GatewayAdapter.java");
+        String mockAdapter = readSource("service", "gateway", "MockGatewayAdapter.java");
+        String httpAdapter = readSource("service", "gateway", "HttpGatewayAdapter.java");
+        String mqttAdapter = readSource("service", "gateway", "MqttGatewayAdapter.java");
+        String commandService = readSource("service", "gateway", "IotGatewayCommandService.java");
+        String iotService = readSource("service", "impl", "IotDeviceServiceImpl.java");
+        String controller = readSource("controller", "IotHardwareController.java");
+
+        assertAll(
+                () -> assertTrue(adapter.contains("GatewayCommandResult sendCommand(GatewayCommandRequest request)")),
+                () -> assertTrue(adapter.contains("GatewayStatusResult queryStatus(GatewayCommandRequest request)")),
+                () -> assertTrue(mockAdapter.contains("模拟网关演示")),
+                () -> assertTrue(httpAdapter.contains("待配置真实网关")),
+                () -> assertTrue(mqttAdapter.contains("待配置真实网关")),
+                () -> assertTrue(commandService.contains("gatewayAdapterRegistry.resolve")),
+                () -> assertTrue(commandService.contains("insert into iot_command_log")),
+                () -> assertTrue(iotService.contains("IotGatewayCommandService")),
+                () -> assertFalse(iotService.contains("mock_success\".equals(resultStatus)")),
+                () -> assertFalse(iotService.contains("!configured || \"mock\".equalsIgnoreCase(protocol)")),
+                () -> assertFalse(controller.contains("mock_success"))
+        );
+    }
+
+    @Test
     void globalExceptionFallbackIncludesRequestIdInsteadOfGenericRetryCopy() throws IOException {
         String handler = readSource("config", "GlobalExceptionHandler.java");
 
